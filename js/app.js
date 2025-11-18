@@ -10,7 +10,8 @@ class CalendarApp {
     constructor() {
         // Estado inicial: Noviembre 2025 (mes 10)
         this.currentDate = new Date(2025, 10, 1);
-        this.subscriptions = loadSubscriptions();
+        // Se inicializa vacío; se cargará de forma asíncrona en init()
+        this.subscriptions = [];
         this.dataLoaded = false;
     }
 
@@ -23,6 +24,14 @@ class CalendarApp {
 
         // Cargar datos desde JSON
         this.dataLoaded = await loadData();
+
+        // Cargar inscripciones (cloud/local)
+        try {
+            this.subscriptions = await loadSubscriptions();
+        } catch (e) {
+            console.warn('Fallo al cargar inscripciones, usando vacío:', e);
+            this.subscriptions = [];
+        }
 
         // Ocultar indicador de carga
         this.showLoading(false);
@@ -131,7 +140,14 @@ class CalendarApp {
      */
     handleSubscription(event) {
         this.subscriptions.push(event);
-        saveSubscriptions(this.subscriptions);
+        // Guardar (local y/o nube)
+        saveSubscriptions(this.subscriptions)
+            .then((res) => {
+                if (res?.cloud) this.showToast('Inscripción guardada en la nube');
+            })
+            .catch(() => {
+                this.showToast('Guardado solo en este dispositivo', 'warn');
+            });
         this.render();
         closeModal();
     }
@@ -141,7 +157,13 @@ class CalendarApp {
      */
     handleRemoveSubscription(subject) {
         this.subscriptions = this.subscriptions.filter(sub => sub.subj !== subject);
-        saveSubscriptions(this.subscriptions);
+        saveSubscriptions(this.subscriptions)
+            .then((res) => {
+                if (res?.cloud) this.showToast('Cambios sincronizados en la nube');
+            })
+            .catch(() => {
+                this.showToast('Cambios guardados solo localmente', 'warn');
+            });
         this.render();
     }
 
