@@ -18,6 +18,11 @@ export function isCloudConfigured() {
   return !!(cfg && cfg.owner && cfg.repo && cfg.branch && cfg.path);
 }
 
+export function hasWriteAccess() {
+  const cfg = getCloudConfig();
+  return !!(cfg && cfg.token && cfg.token.trim());
+}
+
 export function configureCloudInteractive(defaults = {}) {
   // Pre-configurado para este proyecto, solo pedir el token
   const owner = 'mordecoi';
@@ -29,18 +34,24 @@ export function configureCloudInteractive(defaults = {}) {
     'GitHub Personal Access Token (PAT):\n\n' +
     'Necesitas permisos: repo > contents (write)\n' +
     'Crear en: github.com → Settings → Developer settings → Personal access tokens\n\n' +
-    'Déjalo vacío para cancelar:',
+    'Déjalo VACÍO para modo SOLO LECTURA (sin sincronización):',
     defaults.token || ''
   );
   
-  if (!token || !token.trim()) {
-    alert('Configuración cancelada. Sin token, no se puede sincronizar en la nube.');
-    return false;
+  // null = usuario canceló (ESC), string vacía = modo solo lectura
+  if (token === null) {
+    return false; // Usuario canceló con ESC
   }
 
   const cfg = { owner, repo, branch, path, token: token.trim() };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-  alert('✅ Token guardado. Ahora puedes sincronizar tus inscripciones en la nube.');
+  
+  if (!token.trim()) {
+    alert('📖 Modo solo lectura activado. Puedes ver inscripciones pero no sincronizar a la nube.');
+  } else {
+    alert('✅ Token guardado. Ahora puedes sincronizar tus inscripciones en la nube.');
+  }
+  
   return true;
 }
 

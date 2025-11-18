@@ -1,6 +1,6 @@
 import { loadData } from './data.js';
 import { loadSubscriptions, saveSubscriptions, manualSyncToCloud } from './storage.js';
-import { configureCloudInteractive, isCloudConfigured } from './cloud.js';
+import { configureCloudInteractive, isCloudConfigured, hasWriteAccess } from './cloud.js';
 import { renderCalendar, initCalendarControls } from './calendar.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
 import { renderSubscriptions } from './subscriptions.js';
@@ -51,14 +51,18 @@ class CalendarApp {
             syncBtn.addEventListener('click', async () => {
                 const configured = configureCloudInteractive({});
                 if (configured) {
-                    // Mostrar botón de sincronización manual
+                    // Mostrar botón de sincronización manual SOLO si hay token (modo escritura)
                     const manualSyncBtn = document.getElementById('manual-sync-button');
-                    if (manualSyncBtn) manualSyncBtn.classList.remove('hidden');
+                    if (manualSyncBtn && hasWriteAccess()) {
+                        manualSyncBtn.classList.remove('hidden');
+                    }
                     
                     // Reintentar cargar inscripciones desde la nube después de configurar
                     this.subscriptions = await loadSubscriptions();
                     this.render();
-                    this.showToast('Token configurado correctamente', 'success');
+                    
+                    const mode = hasWriteAccess() ? 'escritura' : 'solo lectura';
+                    this.showToast(`Configurado en modo ${mode}`, 'success');
                 }
             });
         }
@@ -66,8 +70,8 @@ class CalendarApp {
         // Botón de sincronización manual
         const manualSyncBtn = document.getElementById('manual-sync-button');
         if (manualSyncBtn) {
-            // Mostrar si ya está configurado
-            if (isCloudConfigured()) {
+            // Mostrar solo si ya está configurado CON token
+            if (isCloudConfigured() && hasWriteAccess()) {
                 manualSyncBtn.classList.remove('hidden');
             }
 
