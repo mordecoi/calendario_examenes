@@ -1,0 +1,23 @@
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Archivos de editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos temporales
+*.tmp
+*.temp
+*.log
+
+# No ignorar la carpeta data/ ya que contiene información importante
+# !data/
+
+# Node modules (si en el futuro se usa npm)
+node_modules/
+package-lock.json

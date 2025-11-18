@@ -1,4 +1,4 @@
-import { eventsData } from './data.js';
+import { getEvents } from './data.js';
 import { getColorForSubject } from './utils.js';
 
 // Elementos del DOM
@@ -55,6 +55,7 @@ export function renderCalendar(year, month, subscriptions, onEventClick) {
 
         // Buscar eventos para este día (FILTRAR LOS QUE YA ESTÁN INSCRITOS)
         const subscribedSubjects = subscriptions.map(sub => sub.subj);
+        const eventsData = getEvents();
         const eventsForDay = eventsData.filter(e => 
             e.date === isoDate && !subscribedSubjects.includes(e.subj)
         );

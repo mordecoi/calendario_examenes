@@ -1,4 +1,4 @@
-import { locationDetails } from './data.js';
+import { getLocations } from './data.js';
 
 // Elementos del DOM del modal
 const modal = document.getElementById('event-modal');
@@ -11,6 +11,7 @@ const closeModalButton = document.getElementById('close-modal');
  * @param {boolean} isSubscribed - Si ya está inscrito a esta materia
  */
 export function showModal(event, onSubscribe, isSubscribed) {
+    const locationDetails = getLocations();
     const loc = locationDetails[event.loc] || { address: 'No disponible', phone: 'No disponible' };
     
     document.getElementById('modal-title').textContent = `Div. ${event.div} - ${event.time}`;

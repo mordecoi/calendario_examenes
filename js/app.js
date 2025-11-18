@@ -1,3 +1,4 @@
+import { loadData } from './data.js';
 import { loadSubscriptions, saveSubscriptions } from './storage.js';
 import { renderCalendar, initCalendarControls } from './calendar.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
@@ -9,18 +10,38 @@ class CalendarApp {
         // Estado inicial: Noviembre 2025 (mes 10)
         this.currentDate = new Date(2025, 10, 1);
         this.subscriptions = loadSubscriptions();
+        this.dataLoaded = false;
     }
 
     /**
      * Inicializa la aplicación
      */
-    init() {
+    async init() {
+        // Mostrar indicador de carga
+        this.showLoading(true);
+
+        // Cargar datos desde JSON
+        this.dataLoaded = await loadData();
+
+        // Ocultar indicador de carga
+        this.showLoading(false);
+
         // Inicializar listeners
         initModalListeners();
         initCalendarControls(this.currentDate, () => this.handleMonthChange());
 
         // Renderizar estado inicial
         this.render();
+    }
+
+    /**
+     * Muestra u oculta el indicador de carga
+     */
+    showLoading(show) {
+        const loadingEl = document.getElementById('loading-indicator');
+        if (loadingEl) {
+            loadingEl.classList.toggle('hidden', !show);
+        }
     }
 
     /**
@@ -72,7 +93,7 @@ class CalendarApp {
 }
 
 // Inicializar la aplicación cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const app = new CalendarApp();
-    app.init();
+    await app.init();
 });
