@@ -9,10 +9,18 @@ let colors = [];
  */
 export async function loadData() {
     try {
-        const response = await fetch('../data/events.json');
+        // Ruta relativa desde la raíz del proyecto (funciona en mobile y desktop)
+        const response = await fetch('./data/events.json', {
+            cache: 'no-cache', // Asegurar datos frescos en móviles
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
         if (!response.ok) {
-            throw new Error('No se pudo cargar el archivo de datos');
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
         const data = await response.json();
         
         eventsData = data.events;
@@ -22,12 +30,14 @@ export async function loadData() {
         console.log('✅ Datos cargados correctamente:', {
             eventos: eventsData.length,
             ubicaciones: Object.keys(locationDetails).length,
-            version: data.config.version
+            version: data.config.version,
+            dispositivo: /Mobile|Android|iPhone/i.test(navigator.userAgent) ? 'Móvil' : 'Desktop'
         });
         
         return true;
     } catch (error) {
         console.error('❌ Error al cargar datos:', error);
+        console.warn('📱 Si estás en móvil, asegúrate de tener conexión a internet');
         // Fallback a datos por defecto
         loadDefaultData();
         return false;
