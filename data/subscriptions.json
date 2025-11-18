@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-18T12:31:58.060Z",
+  "updatedAt": "2025-11-18T12:37:55.799Z",
   "subscriptions": [
     {
       "date": "2025-11-26",
@@ -8,6 +8,14 @@
       "div": "B",
       "prof": "BÍSARO",
       "subj": "INGINF-2014 REDES DE COMPUTADORAS",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2025-11-26",
+      "time": "17:00",
+      "div": "B",
+      "prof": "GIOVANARDI",
+      "subj": "INGINF-2014 TECNOLOGÍA Y SOCIEDAD",
       "loc": "CAMPUS"
     }
   ]
