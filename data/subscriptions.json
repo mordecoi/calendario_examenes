@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-18T12:37:55.799Z",
+  "updatedAt": "2025-11-18T12:40:52.447Z",
   "subscriptions": [
     {
       "date": "2025-11-26",
@@ -11,11 +11,11 @@
       "loc": "CAMPUS"
     },
     {
-      "date": "2025-11-26",
-      "time": "17:00",
+      "date": "2025-11-25",
+      "time": "16:00",
       "div": "B",
-      "prof": "GIOVANARDI",
-      "subj": "INGINF-2014 TECNOLOGÍA Y SOCIEDAD",
+      "prof": "GENCARELLI",
+      "subj": "INGINF-2014 LABORATORIO IV",
       "loc": "CAMPUS"
     }
   ]
