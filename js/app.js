@@ -1,5 +1,5 @@
 import { loadData } from './data.js';
-import { loadSubscriptions, saveSubscriptions } from './storage.js';
+import { loadSubscriptions, saveSubscriptions, manualSyncToCloud } from './storage.js';
 import { configureCloudInteractive, isCloudConfigured } from './cloud.js';
 import { renderCalendar, initCalendarControls } from './calendar.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
@@ -51,10 +51,41 @@ class CalendarApp {
             syncBtn.addEventListener('click', async () => {
                 const configured = configureCloudInteractive({});
                 if (configured) {
+                    // Mostrar botón de sincronización manual
+                    const manualSyncBtn = document.getElementById('manual-sync-button');
+                    if (manualSyncBtn) manualSyncBtn.classList.remove('hidden');
+                    
                     // Reintentar cargar inscripciones desde la nube después de configurar
                     this.subscriptions = await loadSubscriptions();
                     this.render();
-                    this.showToast(isCloudConfigured() ? 'Sincronización configurada' : 'Configuración de sincronización incompleta');
+                    this.showToast('Token configurado correctamente', 'success');
+                }
+            });
+        }
+
+        // Botón de sincronización manual
+        const manualSyncBtn = document.getElementById('manual-sync-button');
+        if (manualSyncBtn) {
+            // Mostrar si ya está configurado
+            if (isCloudConfigured()) {
+                manualSyncBtn.classList.remove('hidden');
+            }
+
+            manualSyncBtn.addEventListener('click', async () => {
+                try {
+                    manualSyncBtn.disabled = true;
+                    manualSyncBtn.textContent = '⏳ Sincronizando...';
+                    
+                    const result = await manualSyncToCloud();
+                    
+                    this.showToast(`✅ ${result.count} inscripción(es) sincronizada(s)`, 'success');
+                    manualSyncBtn.textContent = '☁️ Sincronizar';
+                } catch (error) {
+                    console.error('Error al sincronizar:', error);
+                    this.showToast('❌ Error al sincronizar: ' + error.message, 'error');
+                    manualSyncBtn.textContent = '☁️ Sincronizar';
+                } finally {
+                    manualSyncBtn.disabled = false;
                 }
             });
         }
@@ -140,14 +171,9 @@ class CalendarApp {
      */
     handleSubscription(event) {
         this.subscriptions.push(event);
-        // Guardar (local y/o nube)
-        saveSubscriptions(this.subscriptions)
-            .then((res) => {
-                if (res?.cloud) this.showToast('Inscripción guardada en la nube');
-            })
-            .catch(() => {
-                this.showToast('Guardado solo en este dispositivo', 'warn');
-            });
+        // Guardar solo localmente
+        saveSubscriptions(this.subscriptions);
+        this.showToast('Inscripción guardada localmente');
         this.render();
         closeModal();
     }
@@ -157,13 +183,9 @@ class CalendarApp {
      */
     handleRemoveSubscription(subject) {
         this.subscriptions = this.subscriptions.filter(sub => sub.subj !== subject);
-        saveSubscriptions(this.subscriptions)
-            .then((res) => {
-                if (res?.cloud) this.showToast('Cambios sincronizados en la nube');
-            })
-            .catch(() => {
-                this.showToast('Cambios guardados solo localmente', 'warn');
-            });
+        // Guardar solo localmente
+        saveSubscriptions(this.subscriptions);
+        this.showToast('Inscripción eliminada localmente');
         this.render();
     }
 

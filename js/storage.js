@@ -31,6 +31,7 @@ export async function loadSubscriptions() {
             const cloud = await fetchCloudSubscriptions();
             // Guardar copia local para modo offline
             saveLocalSubscriptions(cloud.subscriptions || []);
+            console.log('📥 Inscripciones cargadas desde la nube');
             return cloud.subscriptions || [];
         } catch (e) {
             console.warn('No se pudo cargar desde la nube, usando local:', e.message || e);
@@ -41,20 +42,30 @@ export async function loadSubscriptions() {
 }
 
 /**
- * Guarda inscripciones localmente y en cloud si está configurado
+ * Guarda inscripciones SOLO localmente (no en cloud)
+ * Para sincronizar con la nube, usar manualSyncToCloud()
  */
-export async function saveSubscriptions(subscriptions) {
-    // Guardar siempre local
+export function saveSubscriptions(subscriptions) {
     saveLocalSubscriptions(subscriptions);
-    // Intentar guardar en la nube si está configurado
-    if (isCloudConfigured()) {
-        try {
-            await saveCloudSubscriptions(subscriptions);
-            return { cloud: true };
-        } catch (e) {
-            console.warn('Fallo al guardar en la nube. Queda guardado localmente.', e);
-            return { cloud: false, error: e };
-        }
+}
+
+/**
+ * Sincronización manual a la nube (batch)
+ * Sube las inscripciones locales actuales a GitHub
+ */
+export async function manualSyncToCloud() {
+    if (!isCloudConfigured()) {
+        throw new Error('Cloud no configurado. Usa "Configurar Token" primero.');
     }
-    return { cloud: false };
+    
+    const localSubs = loadLocalSubscriptions();
+    
+    try {
+        await saveCloudSubscriptions(localSubs);
+        console.log('☁️ Sincronización manual exitosa');
+        return { success: true, count: localSubs.length };
+    } catch (e) {
+        console.error('❌ Error en sincronización manual:', e);
+        throw e;
+    }
 }

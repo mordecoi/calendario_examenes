@@ -19,20 +19,28 @@ export function isCloudConfigured() {
 }
 
 export function configureCloudInteractive(defaults = {}) {
-  // Minimal prompts to avoid adding UI chrome
-  const owner = prompt('GitHub owner/usuario:', defaults.owner || 'mordecoi');
-  if (!owner) return false;
-  const repo = prompt('Repositorio:', defaults.repo || 'calendario_examenes');
-  if (!repo) return false;
-  const branch = prompt('Branch:', defaults.branch || 'main');
-  if (!branch) return false;
-  const path = prompt('Ruta del archivo (JSON):', defaults.path || 'data/subscriptions.json');
-  if (!path) return false;
-  const token = prompt('GitHub Personal Access Token (solo repo:contents). Déjalo vacío para solo lectura:', defaults.token || '');
+  // Pre-configurado para este proyecto, solo pedir el token
+  const owner = 'mordecoi';
+  const repo = 'calendario_examenes';
+  const branch = 'main';
+  const path = 'data/subscriptions.json';
+  
+  const token = prompt(
+    'GitHub Personal Access Token (PAT):\n\n' +
+    'Necesitas permisos: repo > contents (write)\n' +
+    'Crear en: github.com → Settings → Developer settings → Personal access tokens\n\n' +
+    'Déjalo vacío para cancelar:',
+    defaults.token || ''
+  );
+  
+  if (!token || !token.trim()) {
+    alert('Configuración cancelada. Sin token, no se puede sincronizar en la nube.');
+    return false;
+  }
 
-  const cfg = { owner, repo, branch, path, token: token?.trim() || '' };
+  const cfg = { owner, repo, branch, path, token: token.trim() };
   localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-  alert('Configuración de sincronización guardada.');
+  alert('✅ Token guardado. Ahora puedes sincronizar tus inscripciones en la nube.');
   return true;
 }
 
@@ -58,8 +66,11 @@ export async function fetchCloudSubscriptions() {
 
 async function getRemoteSha(cfg) {
   const headers = cfg.token ? { Authorization: `token ${cfg.token}` } : {};
-  const res = await fetch(buildContentsApiUrl(cfg), { headers });
-  if (!res.ok) throw new Error(`No se pudo obtener SHA remoto (${res.status})`);
+  const res = await fetch(buildContentsApiUrl(cfg) + `?ref=${cfg.branch}`, { headers });
+  if (!res.ok) {
+    if (res.status === 404) return null; // Archivo no existe aún
+    throw new Error(`No se pudo obtener SHA remoto (${res.status})`);
+  }
   const json = await res.json();
   return json.sha;
 }
@@ -77,14 +88,19 @@ export async function saveCloudSubscriptions(subscriptions) {
   const contentStr = JSON.stringify(contentObj, null, 2);
   const contentB64 = btoa(unescape(encodeURIComponent(contentStr)));
 
-  const sha = await getRemoteSha(cfg).catch(() => undefined); // si no existe, será un create
+  // Obtener SHA actual (si existe)
+  const sha = await getRemoteSha(cfg);
 
   const body = {
     message: 'chore(subscriptions): update cloud subscriptions',
     content: contentB64,
-    branch: cfg.branch,
-    sha
+    branch: cfg.branch
   };
+  
+  // Solo incluir sha si el archivo ya existe
+  if (sha) {
+    body.sha = sha;
+  }
 
   const res = await fetch(buildContentsApiUrl(cfg), {
     method: 'PUT',
