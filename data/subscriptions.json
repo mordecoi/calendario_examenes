@@ -1,5 +1,14 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-18T00:00:00Z",
-  "subscriptions": []
+  "updatedAt": "2025-11-18T12:29:51.633Z",
+  "subscriptions": [
+    {
+      "date": "2025-11-25",
+      "time": "16:00",
+      "div": "B",
+      "prof": "GENCARELLI",
+      "subj": "INGINF-2014 LABORATORIO IV",
+      "loc": "CAMPUS"
+    }
+  ]
 }
