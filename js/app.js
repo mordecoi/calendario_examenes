@@ -1,5 +1,6 @@
 import { loadData } from './data.js';
 import { loadSubscriptions, saveSubscriptions } from './storage.js';
+import { configureCloudInteractive, isCloudConfigured } from './cloud.js';
 import { renderCalendar, initCalendarControls } from './calendar.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
 import { renderSubscriptions } from './subscriptions.js';
@@ -35,8 +36,31 @@ class CalendarApp {
         initModalListeners();
         initCalendarControls(this.currentDate, () => this.handleMonthChange());
 
+        // Botón de configuración de sincronización
+        const syncBtn = document.getElementById('sync-settings-button');
+        if (syncBtn) {
+            syncBtn.addEventListener('click', async () => {
+                const configured = configureCloudInteractive({});
+                if (configured) {
+                    // Reintentar cargar inscripciones desde la nube después de configurar
+                    this.subscriptions = await loadSubscriptions();
+                    this.render();
+                    this.showToast(isCloudConfigured() ? 'Sincronización configurada' : 'Configuración de sincronización incompleta');
+                }
+            });
+        }
+
         // Renderizar estado inicial
         this.render();
+    }
+
+    showToast(message, type = 'success') {
+        const colors = type === 'success' ? 'bg-green-600' : type === 'warn' ? 'bg-yellow-600' : 'bg-red-600';
+        const toast = document.createElement('div');
+        toast.className = `${colors} text-white fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded shadow-lg text-sm z-50`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 2500);
     }
 
     /**
