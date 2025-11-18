@@ -1,5 +1,14 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-18T00:00:00Z",
-  "subscriptions": []
+  "updatedAt": "2025-11-18T12:31:58.060Z",
+  "subscriptions": [
+    {
+      "date": "2025-11-26",
+      "time": "18:00",
+      "div": "B",
+      "prof": "BÍSARO",
+      "subj": "INGINF-2014 REDES DE COMPUTADORAS",
+      "loc": "CAMPUS"
+    }
+  ]
 }
