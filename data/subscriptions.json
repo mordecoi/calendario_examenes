@@ -1,5 +1,54 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-21T20:42:40.218Z",
-  "subscriptions": []
+  "updatedAt": "2025-11-21T20:44:33.180Z",
+  "subscriptions": [
+    {
+      "date": "2025-11-25",
+      "time": "16:00",
+      "div": "B",
+      "prof": "GENCARELLI",
+      "subj": "INGINF-2014 LABORATORIO IV",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2025-11-26",
+      "time": "17:00",
+      "div": "B",
+      "prof": "GIOVANARDI",
+      "subj": "INGINF-2014 TECNOLOGÍA Y SOCIEDAD",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2025-12-04",
+      "time": "17:00",
+      "div": "B",
+      "prof": "DANIELE",
+      "subj": "INGINF-2014 PROGRAMACIÓN DECLARATIVA",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2025-12-05",
+      "time": "09:00",
+      "div": "B",
+      "prof": "AMERI LOPEZ LOZANO",
+      "subj": "INGINF-2014 INGENIERÍA DE SOFTWARE I",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2025-12-09",
+      "time": "18:00",
+      "div": "B",
+      "prof": "JOAQUÍN",
+      "subj": "INGINF-2014 MÉTODOS NUMÉRICOS",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2025-12-16",
+      "time": "19:00",
+      "div": "B",
+      "prof": "KOLLER",
+      "subj": "INGINF-2014 PROGRAMACIÓN DE REDES",
+      "loc": "CAMPUS"
+    }
+  ]
 }
