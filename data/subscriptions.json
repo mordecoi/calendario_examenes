@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-21T20:34:13.962Z",
+  "updatedAt": "2025-11-21T20:38:31.637Z",
   "subscriptions": [
     {
       "date": "2025-11-25",
@@ -48,14 +48,6 @@
       "div": "B",
       "prof": "KOLLER",
       "subj": "INGINF-2014 PROGRAMACIÓN DE REDES",
-      "loc": "CAMPUS"
-    },
-    {
-      "date": "2025-11-25",
-      "time": "18:00",
-      "div": "B",
-      "prof": "BÍSARO",
-      "subj": "INGINF-2014 REDES DE COMPUTADORAS",
       "loc": "CAMPUS"
     }
   ]
