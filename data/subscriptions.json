@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2025-11-20T05:25:57.748Z",
+  "updatedAt": "2025-11-21T01:07:55.174Z",
   "subscriptions": [
     {
       "date": "2025-11-25",
@@ -8,14 +8,6 @@
       "div": "B",
       "prof": "GENCARELLI",
       "subj": "INGINF-2014 LABORATORIO IV",
-      "loc": "CAMPUS"
-    },
-    {
-      "date": "2025-11-26",
-      "time": "18:00",
-      "div": "B",
-      "prof": "BÍSARO",
-      "subj": "INGINF-2014 REDES DE COMPUTADORAS",
       "loc": "CAMPUS"
     },
     {
