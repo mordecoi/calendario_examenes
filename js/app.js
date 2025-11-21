@@ -1,5 +1,5 @@
 import { loadData } from './data.js';
-import { loadSubscriptions, saveSubscriptions, manualSyncToCloud } from './storage.js';
+import { loadSubscriptions, saveSubscriptions, manualSyncToCloud, resetSubscriptions } from './storage.js';
 import { configureCloudInteractive, isCloudConfigured, hasWriteAccess } from './cloud.js';
 import { renderCalendar, initCalendarControls } from './calendar.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
@@ -90,6 +90,31 @@ class CalendarApp {
                     manualSyncBtn.textContent = '☁️ Sincronizar';
                 } finally {
                     manualSyncBtn.disabled = false;
+                }
+            });
+        }
+
+        // Botón de reseteo
+        const resetBtn = document.getElementById('reset-button');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if (this.subscriptions.length === 0) {
+                    this.showToast('No hay inscripciones para borrar', 'warn');
+                    return;
+                }
+
+                const count = this.subscriptions.length;
+                const confirmed = confirm(
+                    `¿Estás seguro de que quieres BORRAR todas tus ${count} inscripción(es)?\n\n` +
+                    'Esta acción solo afecta este dispositivo. Si tienes sincronización configurada, ' +
+                    'puedes volver a cargar desde la nube.'
+                );
+
+                if (confirmed) {
+                    resetSubscriptions();
+                    this.subscriptions = [];
+                    this.render();
+                    this.showToast('🗑️ Todas las inscripciones fueron borradas', 'success');
                 }
             });
         }

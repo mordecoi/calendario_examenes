@@ -69,3 +69,11 @@ export async function manualSyncToCloud() {
         throw e;
     }
 }
+
+/**
+ * Resetea (borra) todas las inscripciones locales
+ */
+export function resetSubscriptions() {
+    localStorage.removeItem(STORAGE_KEY);
+    console.log('🗑️ Inscripciones reseteadas');
+}
