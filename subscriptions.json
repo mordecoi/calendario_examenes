@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:32:02.886Z",
+  "updatedAt": "2026-11-03T21:32:12.796Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -24,6 +24,14 @@
       "div": "A",
       "prof": "MERLO",
       "subj": "INGENIERÍA DE SOFTWARE II",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2027-02-15",
+      "time": "19:00",
+      "div": "A",
+      "prof": "MIGLIAZZO",
+      "subj": "INGENIERÍA ECONÓMICA",
       "loc": "CAMPUS"
     }
   ]
