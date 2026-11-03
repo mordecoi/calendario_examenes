@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:33:18.457Z",
+  "updatedAt": "2026-11-03T21:33:37.961Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -48,6 +48,14 @@
       "div": "A",
       "prof": "QUINTA",
       "subj": "OPTATIVA II",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2026-12-18",
+      "time": "17:00",
+      "div": "A",
+      "prof": "PASTARINI",
+      "subj": "PROGRAMACIÓN DISTRIBUIDA Y COMPONENTES",
       "loc": "CAMPUS"
     }
   ]
