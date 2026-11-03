@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:30:52.214Z",
+  "updatedAt": "2026-11-03T21:31:30.918Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -8,6 +8,14 @@
       "div": "G",
       "prof": "BARSEGHIAN",
       "subj": "OPTATIVA I",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2026-12-15",
+      "time": "18:00",
+      "div": "A",
+      "prof": "FUNES",
+      "subj": "INFORMÁTICA INDUSTRIAL",
       "loc": "CAMPUS"
     }
   ]
