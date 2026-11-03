@@ -1,113 +1,52 @@
 # Calendario de Exámenes
 
-Aplicación web para gestionar las inscripciones a exámenes finales. Compatible con GitHub Pages.
+Web para elegir fechas de finales (Noviembre 2026 – Marzo 2027), publicada con GitHub Pages.
 
-## 📁 Estructura del Proyecto
+- **PC:** los 4 meses en una grilla 2×2 y, a la derecha, la agenda con todas las fechas.
+- **Celular:** los meses apilados (scroll hacia abajo), cada uno con su agenda debajo.
+- Arriba, la tarjeta **Próximo examen** con la cuenta regresiva.
+- **Correlativas:** una materia queda bloqueada 🔒 hasta que te inscribas a su correlativa en una fecha **anterior**.
+- Tus inscripciones se **sincronizan solas** entre dispositivos.
+
+## Estructura
 
 ```
-calendario_examenes/
-├── index.html              # Página principal (HTML + CSS)
-├── data/                   # Datos de la aplicación
-│   └── events.json        # Base de datos de eventos (persistente)
-└── js/                     # Módulos JavaScript (ES6)
-    ├── app.js             # Punto de entrada principal
-    ├── calendar.js        # Lógica del calendario
-    ├── data.js            # Cargador de datos desde JSON
-    ├── modal.js           # Gestión del modal
-    ├── storage.js         # Manejo de localStorage
-    ├── subscriptions.js   # Lista de inscripciones
-    └── utils.js           # Utilidades generales
+index.html            Página (Tailwind por CDN)
+data/events.json      Fechas, correlativas, sede y colores  ← lo que se edita
+js/app.js             Arranque y coordinación
+js/calendar.js        Grilla de meses
+js/agenda.js          Lista de fechas (columna derecha en PC, debajo de cada mes en celular)
+js/nextExam.js        Tarjeta "Próximo examen"
+js/modal.js           Detalle de una fecha + inscribirse / cambiar / cancelar
+js/subscriptions.js   "Mis inscripciones"
+js/locks.js           Lógica de correlativas
+js/storage.js         localStorage + guardado automático en la nube
+js/cloud.js           Lectura/escritura en GitHub
+js/utils.js           Fechas, colores, helpers
 ```
 
-## 🔧 Módulos
+## Sincronización entre dispositivos
 
-### `data/events.json` ⭐ NUEVO
-Archivo JSON con la base de datos de eventos. **Este es el archivo que debes editar** para actualizar fechas, profesores o agregar nuevos exámenes.
+Las inscripciones se guardan en `subscriptions.json` en la rama **`data`** del repo (no en `main`, así
+el historial queda limpio y Pages no se vuelve a publicar en cada cambio).
 
-Estructura:
-```json
-{
-  "events": [...],      // Array de eventos
-  "locations": {...},   // Ubicaciones disponibles
-  "config": {           // Configuración
-    "colors": [...],
-    "version": "1.0.0",
-    "lastUpdated": "2025-11-18"
-  }
-}
+- **Leer** no requiere nada: cualquier dispositivo ve tus inscripciones (el repo es público).
+- **Escribir** requiere un token de GitHub guardado en ese dispositivo (botón ⚙️). Se pega una sola vez.
+  Crealo en GitHub → Settings → Developer settings → **Fine-grained tokens**, solo para el repo
+  `calendario_examenes`, con permiso **Contents: Read and write**.
+- Cada cambio se guarda local al instante y se sube solo ~1,5 s después. El indicador de arriba muestra
+  `☁️ Sincronizado`, `⏳ Guardando…`, `⚠️ Sin subir` (tocalo para reintentar) o `👁️ Solo lectura`.
+- Si la rama `data` no existe, se crea sola en el primer guardado.
+
+## Actualizar fechas o correlativas
+
+Ver [GUIA_ACTUALIZACION.md](GUIA_ACTUALIZACION.md).
+
+## Probar localmente
+
+Los módulos ES necesitan un servidor (no abre con doble clic):
+
+```bash
+python -m http.server 8000
+# abrir http://localhost:8000
 ```
-
-### `app.js`
-Punto de entrada de la aplicación. Inicializa y coordina todos los módulos.
-
-### `calendar.js`
-Renderizado del calendario y controles de navegación entre meses.
-
-### `data.js`
-Carga dinámicamente los datos desde `events.json`. Incluye un sistema de fallback que usa datos embebidos si el JSON no se puede cargar.
-
-### `modal.js`
-Gestiona la ventana modal con detalles del evento y botón de inscripción.
-
-### `storage.js`
-Manejo de persistencia de datos usando localStorage del navegador.
-
-### `subscriptions.js`
-Renderiza la lista de "Mis Inscripciones" y permite cancelar inscripciones.
-
-### `utils.js`
-Funciones auxiliares como `getColorForSubject()`.
-
-## 🚀 Uso en GitHub Pages
-
-Esta aplicación usa **ES6 Modules** nativos del navegador, por lo que funciona directamente en GitHub Pages sin necesidad de compilación.
-
-### Despliegue:
-1. Subir todos los archivos al repositorio
-2. Activar GitHub Pages en Settings → Pages
-3. Seleccionar la rama `main` como fuente
-4. Acceder a: `https://[usuario].github.io/[repositorio]/`
-
-## 💾 Persistencia de Datos
-
-### Datos de Eventos (events.json)
-Los eventos se almacenan en `data/events.json`. Este archivo es la **fuente única de verdad** para todos los exámenes.
-
-### Inscripciones de Usuarios (localStorage)
-Las inscripciones se guardan automáticamente en `localStorage` del navegador, por lo que persisten entre sesiones.
-
-## 📝 Cómo Actualizar Fechas de Exámenes
-
-1. Abre el archivo `data/events.json`
-2. Modifica, agrega o elimina eventos en el array `events`
-3. Actualiza el campo `lastUpdated` con la fecha actual
-4. Guarda el archivo
-5. Los cambios se reflejarán automáticamente al recargar la página
-
-### Ejemplo de evento:
-```json
-{
-  "date": "2025-12-01",
-  "time": "17:00",
-  "div": "A",
-  "prof": "CALIGARIS",
-  "subj": "INGINF-2014 SISTEMAS DE BASES DE DATOS",
-  "loc": "CAMPUS"
-}
-```
-
-## 📱 Características
-
-- ✅ Diseño responsive (móvil y escritorio)
-- ✅ Calendario interactivo
-- ✅ Modal con detalles de exámenes
-- ✅ Sistema de inscripciones persistente
-- ✅ Colores únicos por materia
-- ✅ Touch-friendly (optimizado para móviles)
-
-## 🛠️ Tecnologías
-
-- HTML5
-- CSS3 (Tailwind CSS via CDN)
-- JavaScript ES6+ (Módulos nativos)
-- LocalStorage API

@@ -1,126 +1,133 @@
+// --- VISTA DE MESES (2×2 en PC, apilados en el celular) ---
 import { getEvents } from './data.js';
-import { getColorForSubject } from './utils.js';
+import { getEventState } from './locks.js';
+import { getColorForSubject, formatMonth, todayIso, byDateTime } from './utils.js';
 
-// Elementos del DOM
-const calendarBody = document.getElementById('calendar-body');
-const monthYearDisplay = document.getElementById('month-year-display');
+const WEEKDAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
 
 /**
- * Renderiza el calendario para un mes y año específicos
- * @param {number} year - Año a renderizar
- * @param {number} month - Mes a renderizar (0-11)
- * @param {Array} subscriptions - Lista de inscripciones actuales
- * @param {Function} onEventClick - Callback cuando se hace click en un evento
+ * @param {HTMLElement} container
+ * @param {string[]} months - ["2026-11", ...]
+ * @param {Array} subscriptions
+ * @param {{onDayClick: Function, renderMonthAgenda: Function}} handlers
  */
-export function renderCalendar(year, month, subscriptions, onEventClick) {
-    // Limpiar calendario anterior
-    calendarBody.innerHTML = '';
-    
-    // Configurar el título del mes y año
-    const monthName = new Date(year, month).toLocaleString('es-ES', { month: 'long', year: 'numeric' });
-    monthYearDisplay.textContent = monthName.charAt(0).toUpperCase() + monthName.slice(1);
+export function renderMonths(container, months, subscriptions, { onDayClick, renderMonthAgenda }) {
+    container.innerHTML = '';
+    const events = getEvents();
+    const today = todayIso();
 
-    // Días en el mes y día de inicio (0=Domingo, 1=Lunes...)
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    // Ajustar el primer día para que la semana comience en Lunes (0=Lunes, 6=Domingo)
-    const startingDay = (firstDay === 0) ? 6 : firstDay - 1;
+    months.forEach(ym => {
+        const [year, month] = ym.split('-').map(Number);
+        const monthEvents = events.filter(e => e.date.startsWith(ym)).sort(byDateTime);
 
-    // 1. Celdas vacías antes del primer día
-    for (let i = 0; i < startingDay; i++) {
-        const emptyCell = document.createElement('div');
-        emptyCell.className = 'p-1 sm:p-2 h-20 sm:h-28 md:h-36 bg-gray-50 opacity-50';
-        calendarBody.appendChild(emptyCell);
-    }
+        const section = document.createElement('section');
+        section.id = `m-${ym}`;
+        section.className = 'month-card bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 scroll-mt-20';
 
-    // 2. Celdas de los días del mes
-    for (let day = 1; day <= daysInMonth; day++) {
-        const dayCell = document.createElement('div');
-        dayCell.className = 'calendar-day-cell p-1 sm:p-2 h-20 sm:h-28 md:h-36 bg-white relative hover:bg-gray-50 transition-colors';
-        
-        // Formato de fecha ISO (ej: 2025-11-25)
-        const isoDate = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        // Número del día
-        const dayNumber = document.createElement('span');
-        dayNumber.className = 'day-number text-[10px] sm:text-sm font-semibold text-gray-700 block';
-        dayNumber.textContent = day;
-        dayCell.appendChild(dayNumber);
+        const mineCount = monthEvents.filter(e => getEventState(e, subscriptions) === 'subscribed').length;
+        section.innerHTML = `
+            <div class="flex items-baseline justify-between mb-3 px-1">
+                <h2 class="text-lg sm:text-xl font-bold text-gray-900">${formatMonth(ym)}</h2>
+                <span class="text-xs text-gray-500">${monthEvents.length} fechas${mineCount ? ` · <span class="text-emerald-700 font-semibold">${mineCount} tuya${mineCount > 1 ? 's' : ''}</span>` : ''}</span>
+            </div>
+            <div class="grid grid-cols-7 gap-1 mb-1">
+                ${WEEKDAYS.map(d => `<div class="text-center text-[11px] font-semibold text-gray-400 uppercase">${d}</div>`).join('')}
+            </div>
+        `;
 
-        // Contenedor de eventos para scroll
-        const eventsContainer = document.createElement('div');
-        eventsContainer.className = 'absolute top-6 sm:top-8 left-0.5 sm:left-1 right-0.5 sm:right-1 bottom-0.5 sm:bottom-1 overflow-y-auto space-y-0.5 sm:space-y-1';
-        dayCell.appendChild(eventsContainer);
+        const grid = document.createElement('div');
+        grid.className = 'grid grid-cols-7 gap-1';
 
-        // Buscar eventos para este día (FILTRAR LOS QUE YA ESTÁN INSCRITOS)
-        const subscribedSubjects = subscriptions.map(sub => sub.subj);
-        const eventsData = getEvents();
-        const eventsForDay = eventsData.filter(e => 
-            e.date === isoDate && !subscribedSubjects.includes(e.subj)
-        );
+        const firstDay = new Date(year, month - 1, 1).getDay();
+        const startingDay = firstDay === 0 ? 6 : firstDay - 1; // semana desde el lunes
+        const daysInMonth = new Date(year, month, 0).getDate();
 
-        // Renderizar eventos
-        eventsForDay.forEach(event => {
-            const eventEl = document.createElement('div');
-            const colorClass = getColorForSubject(event.subj);
-            eventEl.className = `event-card ${colorClass} text-white text-[9px] sm:text-[10px] md:text-xs p-0.5 sm:p-1 rounded cursor-pointer hover:opacity-80 active:opacity-70 transition-opacity`;
-            eventEl.textContent = `${event.time} - ${event.div}`;
-            eventEl.title = `${event.subj}`;
+        for (let i = 0; i < startingDay; i++) {
+            grid.appendChild(document.createElement('div'));
+        }
 
-            // Touch events para mejor respuesta táctil
-            let touchStartY = 0;
-            eventEl.addEventListener('touchstart', (e) => {
-                touchStartY = e.touches[0].clientY;
-            });
-            
-            eventEl.addEventListener('touchend', (e) => {
-                const touchEndY = e.changedTouches[0].clientY;
-                // Solo abrir si no fue scroll
-                if (Math.abs(touchEndY - touchStartY) < 10) {
-                    e.preventDefault();
-                    onEventClick(event);
-                }
-            });
+        for (let day = 1; day <= daysInMonth; day++) {
+            const iso = `${ym}-${String(day).padStart(2, '0')}`;
+            const dayEvents = monthEvents.filter(e => e.date === iso);
+            grid.appendChild(buildDayCell(iso, day, dayEvents, subscriptions, today, onDayClick));
+        }
 
-            eventEl.addEventListener('click', (e) => {
-                e.stopPropagation();
-                onEventClick(event);
-            });
-            
-            eventsContainer.appendChild(eventEl);
-        });
+        section.appendChild(grid);
 
-        calendarBody.appendChild(dayCell);
-    }
+        // Agenda del mes (solo en el celular)
+        const agenda = document.createElement('div');
+        agenda.className = 'month-agenda lg:hidden mt-4 border-t border-gray-100 pt-3';
+        section.appendChild(agenda);
+        renderMonthAgenda(agenda, monthEvents);
 
-    // 3. Celdas vacías después del último día
-    const totalCells = startingDay + daysInMonth;
-    const remainingCells = (totalCells % 7 === 0) ? 0 : 7 - (totalCells % 7);
-    
-    for (let i = 0; i < remainingCells; i++) {
-        const emptyCell = document.createElement('div');
-        emptyCell.className = 'p-1 sm:p-2 h-20 sm:h-28 md:h-36 bg-gray-50 opacity-50';
-        calendarBody.appendChild(emptyCell);
-    }
+        container.appendChild(section);
+    });
 }
 
-/**
- * Inicializa los controles de navegación del calendario
- * @param {Object} currentDate - Objeto Date con la fecha actual
- * @param {Function} onMonthChange - Callback cuando cambia el mes
- */
-export function initCalendarControls(currentDate, onMonthChange) {
-    const prevButton = document.getElementById('prev-month');
-    const nextButton = document.getElementById('next-month');
+function buildDayCell(iso, day, dayEvents, subscriptions, today, onDayClick) {
+    const isPast = iso < today;
+    const isToday = iso === today;
+    const states = dayEvents.map(e => getEventState(e, subscriptions));
+    const mine = dayEvents.filter((e, i) => states[i] === 'subscribed');
 
-    prevButton.addEventListener('click', () => {
-        currentDate.setMonth(currentDate.getMonth() - 1);
-        onMonthChange(currentDate);
-    });
+    const cell = document.createElement(dayEvents.length ? 'button' : 'div');
+    cell.dataset.date = iso;
+    let cls = 'day-cell relative h-11 sm:h-14 lg:h-16 rounded-lg flex flex-col items-center justify-start pt-1 text-sm transition-colors';
+    if (dayEvents.length) {
+        cls += ' bg-gray-50 hover:bg-blue-50 active:bg-blue-100 cursor-pointer';
+    }
+    if (mine.length) {
+        cls += ' ring-2 ring-emerald-500 bg-emerald-50';
+    }
+    if (isToday) {
+        cls += ' outline outline-2 outline-blue-500';
+    }
+    if (isPast) cls += ' opacity-40';
+    cell.className = cls;
 
-    nextButton.addEventListener('click', () => {
-        currentDate.setMonth(currentDate.getMonth() + 1);
-        onMonthChange(currentDate);
-    });
+    const num = document.createElement('span');
+    num.className = `leading-none ${isToday ? 'font-bold text-blue-600' : dayEvents.length ? 'font-semibold text-gray-900' : 'text-gray-400'}`;
+    num.textContent = day;
+    cell.appendChild(num);
+
+    if (dayEvents.length) {
+        const dots = document.createElement('div');
+        dots.className = 'flex flex-wrap justify-center gap-0.5 sm:gap-1 mt-1 px-0.5';
+        dayEvents.forEach((e, i) => {
+            const dot = document.createElement('span');
+            const state = states[i];
+            dot.className = 'block rounded-full w-1.5 h-1.5 sm:w-2 sm:h-2';
+            if (state === 'locked') {
+                dot.style.background = '#d1d5db';
+            } else if (state === 'other') {
+                dot.style.border = `1.5px solid ${getColorForSubject(e.subj)}`;
+            } else {
+                dot.style.background = getColorForSubject(e.subj);
+            }
+            if (state === 'subscribed') dot.className += ' ring-2 ring-offset-1 ring-emerald-500';
+            dots.appendChild(dot);
+        });
+        cell.appendChild(dots);
+
+        if (mine.length) {
+            const check = document.createElement('span');
+            check.className = 'absolute top-0.5 right-1 text-[10px] text-emerald-600 font-bold';
+            check.textContent = '✓';
+            cell.appendChild(check);
+        }
+
+        cell.title = dayEvents
+            .map((e, i) => `${e.time} · Div ${e.div} · ${e.subj}${states[i] === 'subscribed' ? ' ✓' : states[i] === 'locked' ? ' 🔒' : ''}`)
+            .join('\n');
+        cell.setAttribute('aria-label', `${iso}: ${dayEvents.length} exámenes`);
+        cell.addEventListener('click', () => onDayClick(iso));
+    }
+    return cell;
+}
+
+/** Resalta brevemente un elemento */
+export function flash(el) {
+    if (!el) return;
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1400);
 }

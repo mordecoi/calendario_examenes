@@ -1,233 +1,207 @@
-import { loadData } from './data.js';
-import { loadSubscriptions, saveSubscriptions, manualSyncToCloud, resetSubscriptions } from './storage.js';
-import { configureCloudInteractive, isCloudConfigured, hasWriteAccess } from './cloud.js';
-import { renderCalendar, initCalendarControls } from './calendar.js';
+import { loadData, getEvents, getMonths, getConfig } from './data.js';
+import { loadSubscriptions, saveSubscriptions, onSyncStatus, hasPendingChanges, flush } from './storage.js';
+import { setToken, getToken, hasWriteAccess } from './cloud.js';
+import { findBrokenSubscriptions } from './locks.js';
+import { renderMonths, flash } from './calendar.js';
+import { renderAgenda } from './agenda.js';
+import { renderNextExam } from './nextExam.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
 import { renderSubscriptions } from './subscriptions.js';
+import { eventKey, todayIso } from './utils.js';
 
-// --- ESTADO DE LA APLICACIÓN ---
-class CalendarApp {
+const desktop = window.matchMedia('(min-width: 1024px)');
+const $ = id => document.getElementById(id);
+
+const SYNC_PILL = {
+    saved:    { text: '☁️ Sincronizado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    saving:   { text: '⏳ Guardando…',   cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+    error:    { text: '⚠️ Sin subir',    cls: 'bg-amber-50 text-amber-800 border-amber-200' },
+    offline:  { text: '📴 Sin conexión', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
+    readonly: { text: '👁️ Solo lectura', cls: 'bg-gray-100 text-gray-600 border-gray-200' }
+};
+
+class App {
     constructor() {
-        // Estado inicial: Noviembre 2025 (mes 10)
-        this.currentDate = new Date(2025, 10, 1);
-        // Se inicializa vacío; se cargará de forma asíncrona en init()
         this.subscriptions = [];
-        this.dataLoaded = false;
+        this.validKeys = new Set();
+        this.lastRefresh = 0;
+        this.syncStatus = 'readonly';
     }
 
-    /**
-     * Inicializa la aplicación
-     */
+    isValid = sub => this.validKeys.has(eventKey(sub));
+
     async init() {
-        // Mostrar indicador de carga
-        this.showLoading(true);
+        onSyncStatus((status, detail) => this.setSyncStatus(status, detail));
 
-        // Cargar datos desde JSON
-        this.dataLoaded = await loadData();
-
-        // Cargar inscripciones (cloud/local)
-        try {
-            this.subscriptions = await loadSubscriptions();
-        } catch (e) {
-            console.warn('Fallo al cargar inscripciones, usando vacío:', e);
-            this.subscriptions = [];
+        const fresh = await loadData();
+        if (!getEvents().length) {
+            $('loading-indicator').innerHTML = '<p class="text-gray-600 px-6 text-center">No se pudieron cargar las fechas. Revisá la conexión y recargá.</p>';
+            return;
         }
+        this.validKeys = new Set(getEvents().map(eventKey));
+        this.subscriptions = await loadSubscriptions(this.isValid);
+        this.lastRefresh = Date.now();
 
-        // Ocultar indicador de carga
-        this.showLoading(false);
+        $('period').textContent = getConfig().period || '';
+        $('loading-indicator').classList.add('hidden');
+        if (!fresh) this.toast('Sin conexión: mostrando la última copia guardada', 'warn');
 
-        // Mostrar advertencia si hubo error en la carga (modo offline)
-        if (!this.dataLoaded) {
-            this.showOfflineWarning();
-        }
-
-        // Inicializar listeners
         initModalListeners();
-        initCalendarControls(this.currentDate, () => this.handleMonthChange());
+        $('settings-button').addEventListener('click', () => this.configureToken());
+        $('sync-pill').addEventListener('click', () => this.onPillClick());
+        $('reset-button').addEventListener('click', () => this.resetAll());
 
-        // Botón de configuración de sincronización
-        const syncBtn = document.getElementById('sync-settings-button');
-        if (syncBtn) {
-            syncBtn.addEventListener('click', async () => {
-                const configured = configureCloudInteractive({});
-                if (configured) {
-                    // Mostrar botón de sincronización manual SOLO si hay token (modo escritura)
-                    const manualSyncBtn = document.getElementById('manual-sync-button');
-                    if (manualSyncBtn && hasWriteAccess()) {
-                        manualSyncBtn.classList.remove('hidden');
-                    }
-                    
-                    // Reintentar cargar inscripciones desde la nube después de configurar
-                    this.subscriptions = await loadSubscriptions();
-                    this.render();
-                    
-                    const mode = hasWriteAccess() ? 'escritura' : 'solo lectura';
-                    this.showToast(`Configurado en modo ${mode}`, 'success');
-                }
-            });
-        }
+        // Al volver a la pestaña/app, traer cambios hechos en otro dispositivo
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') this.refreshFromCloud();
+        });
 
-        // Botón de sincronización manual
-        const manualSyncBtn = document.getElementById('manual-sync-button');
-        if (manualSyncBtn) {
-            // Mostrar solo si ya está configurado CON token
-            if (isCloudConfigured() && hasWriteAccess()) {
-                manualSyncBtn.classList.remove('hidden');
-            }
-
-            manualSyncBtn.addEventListener('click', async () => {
-                try {
-                    manualSyncBtn.disabled = true;
-                    manualSyncBtn.textContent = '⏳ Sincronizando...';
-                    
-                    const result = await manualSyncToCloud();
-                    
-                    this.showToast(`✅ ${result.count} inscripción(es) sincronizada(s)`, 'success');
-                    manualSyncBtn.textContent = '☁️ Sincronizar';
-                } catch (error) {
-                    console.error('Error al sincronizar:', error);
-                    this.showToast('❌ Error al sincronizar: ' + error.message, 'error');
-                    manualSyncBtn.textContent = '☁️ Sincronizar';
-                } finally {
-                    manualSyncBtn.disabled = false;
-                }
-            });
-        }
-
-        // Botón de reseteo
-        const resetBtn = document.getElementById('reset-button');
-        if (resetBtn) {
-            resetBtn.addEventListener('click', () => {
-                if (this.subscriptions.length === 0) {
-                    this.showToast('No hay inscripciones para borrar', 'warn');
-                    return;
-                }
-
-                const count = this.subscriptions.length;
-                const confirmed = confirm(
-                    `¿Estás seguro de que quieres BORRAR todas tus ${count} inscripción(es)?\n\n` +
-                    'Esta acción solo afecta este dispositivo. Si tienes sincronización configurada, ' +
-                    'puedes volver a cargar desde la nube.'
-                );
-
-                if (confirmed) {
-                    resetSubscriptions();
-                    this.subscriptions = [];
-                    this.render();
-                    this.showToast('🗑️ Todas las inscripciones fueron borradas', 'success');
-                }
-            });
-        }
-
-        // Renderizar estado inicial
         this.render();
+        this.initialScroll();
     }
 
-    showToast(message, type = 'success') {
-        const colors = type === 'success' ? 'bg-green-600' : type === 'warn' ? 'bg-yellow-600' : 'bg-red-600';
-        const toast = document.createElement('div');
-        toast.className = `${colors} text-white fixed bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded shadow-lg text-sm z-50`;
-        toast.textContent = message;
-        document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 2500);
-    }
+    // ---------- Render ----------
 
-    /**
-     * Muestra advertencia de modo offline
-     */
-    showOfflineWarning() {
-        const warning = document.createElement('div');
-        warning.className = 'fixed top-4 left-4 right-4 sm:left-auto sm:right-4 sm:w-96 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-3 sm:p-4 rounded shadow-lg z-40 text-sm';
-        warning.innerHTML = `
-            <div class="flex items-start">
-                <svg class="h-5 w-5 text-yellow-500 mr-2 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                </svg>
-                <div class="flex-1">
-                    <strong class="font-semibold block mb-1">Modo sin conexión</strong>
-                    <p class="text-xs">Usando datos de respaldo. Algunos eventos pueden estar desactualizados.</p>
-                </div>
-                <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-yellow-700 hover:text-yellow-900">
-                    <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
-                    </svg>
-                </button>
-            </div>
-        `;
-        document.body.appendChild(warning);
-        
-        // Auto-cerrar después de 8 segundos
-        setTimeout(() => {
-            if (warning.parentElement) {
-                warning.remove();
-            }
-        }, 8000);
-    }
-
-    /**
-     * Muestra u oculta el indicador de carga
-     */
-    showLoading(show) {
-        const loadingEl = document.getElementById('loading-indicator');
-        if (loadingEl) {
-            loadingEl.classList.toggle('hidden', !show);
-        }
-    }
-
-    /**
-     * Renderiza todo el estado de la aplicación
-     */
     render() {
-        renderCalendar(
-            this.currentDate.getFullYear(),
-            this.currentDate.getMonth(),
-            this.subscriptions,
-            (event) => this.handleEventClick(event)
-        );
-        renderSubscriptions(this.subscriptions, (subject) => this.handleRemoveSubscription(subject));
+        const subs = this.subscriptions;
+        const open = e => this.openEvent(e);
+
+        renderNextExam($('next-exam'), subs, open);
+
+        renderMonths($('months'), getMonths(), subs, {
+            onDayClick: iso => this.jumpToDay(iso),
+            renderMonthAgenda: (el, events) => renderAgenda(el, events, subs, { idPrefix: 'am', onEventClick: open })
+        });
+
+        const aside = $('agenda-aside');
+        const scrollTop = aside.scrollTop;
+        renderAgenda($('agenda-list'), getEvents(), subs, { idPrefix: 'ad', groupByMonth: true, onEventClick: open });
+        aside.scrollTop = scrollTop;
+
+        renderSubscriptions($('subscriptions-list'), subs, findBrokenSubscriptions(subs), {
+            onOpen: open,
+            onRemove: sub => this.remove(sub)
+        });
     }
 
-    /**
-     * Maneja el click en un evento del calendario
-     */
-    handleEventClick(event) {
-        const isSubscribed = this.subscriptions.some(sub => sub.subj === event.subj);
-        showModal(event, (e) => this.handleSubscription(e), isSubscribed);
+    initialScroll() {
+        const today = todayIso();
+        // PC: la agenda arranca en el próximo día con exámenes
+        const next = [...document.querySelectorAll('#agenda-list .agenda-day')].find(el => el.dataset.date >= today);
+        if (next) this.scrollAside(next, false);
+
+        // Celular: ir al mes actual si no es el primero
+        const months = getMonths();
+        const current = today.slice(0, 7);
+        if (!desktop.matches && months.includes(current) && months[0] !== current) {
+            $(`m-${current}`)?.scrollIntoView({ block: 'start' });
+        }
     }
 
-    /**
-     * Maneja la inscripción a un evento
-     */
-    handleSubscription(event) {
-        this.subscriptions.push(event);
-        // Guardar solo localmente
+    scrollAside(el, smooth = true) {
+        const aside = $('agenda-aside');
+        const header = aside.querySelector('h3')?.offsetHeight || 0;
+        aside.scrollTo({ top: el.offsetTop - header - 4, behavior: smooth ? 'smooth' : 'auto' });
+    }
+
+    jumpToDay(iso) {
+        if (desktop.matches) {
+            const el = $(`ad-${iso}`);
+            if (el) { this.scrollAside(el); flash(el); }
+        } else {
+            const el = $(`am-${iso}`);
+            if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'start' }); flash(el); }
+        }
+    }
+
+    // ---------- Acciones ----------
+
+    openEvent(event) {
+        showModal(event, this.subscriptions, {
+            onSubscribe: e => {
+                this.subscriptions = [...this.subscriptions, e];
+                this.persist('Inscripción guardada');
+            },
+            onRemove: sub => this.remove(sub),
+            onReplace: (old, e) => {
+                this.subscriptions = [...this.subscriptions.filter(s => eventKey(s) !== eventKey(old)), e];
+                this.persist('Fecha cambiada');
+            }
+        });
+    }
+
+    remove(sub) {
+        this.subscriptions = this.subscriptions.filter(s => eventKey(s) !== eventKey(sub));
+        this.persist('Inscripción cancelada');
+    }
+
+    resetAll() {
+        if (!this.subscriptions.length) return this.toast('No hay inscripciones para borrar', 'warn');
+        if (!confirm(`¿Borrar tus ${this.subscriptions.length} inscripciones?`)) return;
+        this.subscriptions = [];
+        this.persist('Inscripciones borradas');
+    }
+
+    persist(message) {
         saveSubscriptions(this.subscriptions);
-        this.showToast('Inscripción guardada localmente');
-        this.render();
         closeModal();
+        this.render();
+        const suffix = hasWriteAccess() ? '' : ' (solo en este dispositivo)';
+        this.toast(message + suffix, hasWriteAccess() ? 'success' : 'warn');
     }
 
-    /**
-     * Maneja la eliminación de una inscripción
-     */
-    handleRemoveSubscription(subject) {
-        this.subscriptions = this.subscriptions.filter(sub => sub.subj !== subject);
-        // Guardar solo localmente
-        saveSubscriptions(this.subscriptions);
-        this.showToast('Inscripción eliminada localmente');
-        this.render();
+    async refreshFromCloud() {
+        if (hasPendingChanges() || Date.now() - this.lastRefresh < 20000) return;
+        this.lastRefresh = Date.now();
+        const before = JSON.stringify(this.subscriptions);
+        this.subscriptions = await loadSubscriptions(this.isValid);
+        if (JSON.stringify(this.subscriptions) !== before) this.render();
     }
 
-    /**
-     * Maneja el cambio de mes
-     */
-    handleMonthChange() {
+    // ---------- Sincronización ----------
+
+    setSyncStatus(status, detail = '') {
+        this.syncStatus = status;
+        const pill = $('sync-pill');
+        const conf = SYNC_PILL[status] || SYNC_PILL.readonly;
+        pill.textContent = conf.text;
+        pill.className = `text-xs font-medium px-2.5 py-1 rounded-full border whitespace-nowrap ${conf.cls}`;
+        pill.title = detail || (status === 'readonly' ? 'Configurá el token (⚙️) para guardar en la nube' : '');
+    }
+
+    onPillClick() {
+        if (this.syncStatus === 'error' || this.syncStatus === 'offline') {
+            if (hasPendingChanges()) flush();
+            else this.refreshFromCloud();
+        } else if (this.syncStatus === 'readonly') {
+            this.configureToken();
+        }
+    }
+
+    async configureToken() {
+        const current = getToken();
+        const token = prompt(
+            'Token de GitHub para guardar tus inscripciones en la nube.\n\n' +
+            'Crealo en github.com → Settings → Developer settings → Fine-grained tokens, ' +
+            'solo para el repo calendario_examenes, con permiso "Contents: Read and write".\n\n' +
+            'Se guarda solo en este dispositivo. Dejalo vacío para modo solo lectura.',
+            current
+        );
+        if (token === null) return;
+        setToken(token);
+        this.subscriptions = await loadSubscriptions(this.isValid);
         this.render();
+        this.toast(hasWriteAccess() ? 'Token guardado: los cambios se sincronizan solos' : 'Modo solo lectura', 'success');
+    }
+
+    toast(message, type = 'success') {
+        const colors = { success: 'bg-gray-900', warn: 'bg-amber-600', error: 'bg-red-600' };
+        const el = document.createElement('div');
+        el.className = `${colors[type] || colors.success} text-white fixed bottom-5 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl shadow-lg text-sm z-[60] max-w-[90vw] text-center`;
+        el.textContent = message;
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2600);
     }
 }
 
-// Inicializar la aplicación cuando el DOM esté listo
-document.addEventListener('DOMContentLoaded', async () => {
-    const app = new CalendarApp();
-    await app.init();
-});
+document.addEventListener('DOMContentLoaded', () => new App().init());

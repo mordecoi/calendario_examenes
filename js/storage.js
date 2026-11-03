@@ -1,79 +1,117 @@
-// --- GESTIÓN DE LOCALSTORAGE + CLOUD SYNC ---
-
-import { isCloudConfigured, fetchCloudSubscriptions, saveCloudSubscriptions } from './cloud.js';
+// --- INSCRIPCIONES: localStorage + nube ---
+import { fetchCloudSubscriptions, saveCloudSubscriptions, hasWriteAccess } from './cloud.js';
 
 const STORAGE_KEY = 'calendar_subscriptions';
+const PENDING_KEY = 'calendar_subscriptions_pending';
+const SAVE_DELAY_MS = 1500;
 
-/**
- * Carga las inscripciones desde localStorage
- * @returns {Array} Array de eventos suscritos
- */
+let saveTimer = null;
+let statusListener = () => {};
+
+function safeGet(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+}
+function safeSet(key, value) {
+    try { localStorage.setItem(key, value); } catch { /* sin storage */ }
+}
+function safeRemove(key) {
+    try { localStorage.removeItem(key); } catch { /* sin storage */ }
+}
+
 export function loadLocalSubscriptions() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : [];
-}
-
-/**
- * Guarda las inscripciones en localStorage
- * @param {Array} subscriptions - Array de eventos a guardar
- */
-export function saveLocalSubscriptions(subscriptions) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(subscriptions));
-}
-
-/**
- * Carga inscripciones prefiriendo cloud cuando esté configurado
- * Fallback a local si hay error o no está configurado
- */
-export async function loadSubscriptions() {
-    if (isCloudConfigured()) {
-        try {
-            const cloud = await fetchCloudSubscriptions();
-            // Guardar copia local para modo offline
-            saveLocalSubscriptions(cloud.subscriptions || []);
-            console.log('📥 Inscripciones cargadas desde la nube');
-            return cloud.subscriptions || [];
-        } catch (e) {
-            console.warn('No se pudo cargar desde la nube, usando local:', e.message || e);
-            return loadLocalSubscriptions();
-        }
+    try {
+        const saved = JSON.parse(safeGet(STORAGE_KEY) || '[]');
+        return Array.isArray(saved) ? saved : [];
+    } catch {
+        return [];
     }
-    return loadLocalSubscriptions();
+}
+
+function saveLocalSubscriptions(subscriptions) {
+    safeSet(STORAGE_KEY, JSON.stringify(subscriptions));
+}
+
+function isPending() {
+    return safeGet(PENDING_KEY) === '1';
 }
 
 /**
- * Guarda inscripciones SOLO localmente (no en cloud)
- * Para sincronizar con la nube, usar manualSyncToCloud()
+ * Estados: 'saved' | 'saving' | 'error' | 'readonly' | 'offline'
  */
+export function onSyncStatus(listener) {
+    statusListener = listener;
+}
+
+function setStatus(status, detail = '') {
+    statusListener(status, detail);
+}
+
+/**
+ * Carga las inscripciones. La nube manda, salvo que este dispositivo
+ * tenga cambios sin subir (en ese caso se suben).
+ * @param {Function} isValid - descarta inscripciones a fechas que ya no existen
+ * @returns {Promise<Array>}
+ */
+export async function loadSubscriptions(isValid = () => true) {
+    const local = loadLocalSubscriptions().filter(isValid);
+    let cloud;
+    try {
+        cloud = await fetchCloudSubscriptions();
+    } catch (e) {
+        console.warn('No se pudo leer la nube, uso copia local:', e.message);
+        setStatus('offline', e.message);
+        return local;
+    }
+
+    if (hasWriteAccess() && (isPending() || (cloud.missing && local.length > 0))) {
+        saveLocalSubscriptions(local);
+        scheduleSave(local, 0);
+        return local;
+    }
+
+    const subs = cloud.subscriptions.filter(isValid);
+    saveLocalSubscriptions(subs);
+    setStatus(hasWriteAccess() ? 'saved' : 'readonly');
+    return subs;
+}
+
+/** Guarda local al instante y sube a la nube un momento después */
 export function saveSubscriptions(subscriptions) {
     saveLocalSubscriptions(subscriptions);
+    if (!hasWriteAccess()) {
+        setStatus('readonly');
+        return;
+    }
+    scheduleSave(subscriptions, SAVE_DELAY_MS);
 }
 
-/**
- * Sincronización manual a la nube (batch)
- * Sube las inscripciones locales actuales a GitHub
- */
-export async function manualSyncToCloud() {
-    if (!isCloudConfigured()) {
-        throw new Error('Cloud no configurado. Usa "Configurar Token" primero.');
-    }
-    
-    const localSubs = loadLocalSubscriptions();
-    
+function scheduleSave(subscriptions, delay) {
+    safeSet(PENDING_KEY, '1');
+    setStatus('saving');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, delay);
+}
+
+export async function flush() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (!isPending() || !hasWriteAccess()) return;
     try {
-        await saveCloudSubscriptions(localSubs);
-        console.log('☁️ Sincronización manual exitosa');
-        return { success: true, count: localSubs.length };
+        await saveCloudSubscriptions(loadLocalSubscriptions());
+        safeRemove(PENDING_KEY);
+        setStatus('saved');
     } catch (e) {
-        console.error('❌ Error en sincronización manual:', e);
-        throw e;
+        console.error('Error al sincronizar:', e);
+        setStatus('error', e.message);
     }
 }
 
-/**
- * Resetea (borra) todas las inscripciones locales
- */
-export function resetSubscriptions() {
-    localStorage.removeItem(STORAGE_KEY);
-    console.log('🗑️ Inscripciones reseteadas');
+export function hasPendingChanges() {
+    return isPending();
 }
+
+// Reintentar al volver la conexión y subir antes de salir de la app
+window.addEventListener('online', () => { if (isPending()) flush(); });
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && saveTimer) flush();
+});

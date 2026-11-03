@@ -1,70 +1,56 @@
-import { getColorForSubject } from './utils.js';
-
-// Elementos del DOM
-const subscriptionsListContainer = document.getElementById('subscriptions-list-container');
-const emptyListMessage = document.getElementById('empty-list-message');
-const subscriptionsBadge = document.getElementById('subscriptions-badge');
+// --- LISTA "MIS INSCRIPCIONES" ---
+import { getLockInfo } from './locks.js';
+import { eventKey, getColorForSubject, formatLongDate, countdownLabel, todayIso, byDateTime, escapeHtml } from './utils.js';
 
 /**
- * Renderiza la lista de inscripciones
- * @param {Array} subscriptions - Array de eventos suscritos
- * @param {Function} onRemove - Callback cuando se elimina una inscripción
+ * @param {HTMLElement} container
+ * @param {Array} subscriptions
+ * @param {Set<string>} broken - claves de inscripciones sin su correlativa
+ * @param {{onOpen: Function, onRemove: Function}} handlers
  */
-export function renderSubscriptions(subscriptions, onRemove) {
-    // Limpiar la lista
-    subscriptionsListContainer.innerHTML = '';
+export function renderSubscriptions(container, subscriptions, broken, { onOpen, onRemove }) {
+    const badge = document.getElementById('subscriptions-badge');
+    badge.textContent = subscriptions.length;
+    badge.classList.toggle('hidden', subscriptions.length === 0);
 
-    // Actualizar badge
-    if (subscriptions.length > 0) {
-        subscriptionsBadge.textContent = subscriptions.length;
-        subscriptionsBadge.classList.remove('hidden');
-    } else {
-        subscriptionsBadge.classList.add('hidden');
+    container.innerHTML = '';
+    if (!subscriptions.length) {
+        container.innerHTML = `
+            <div class="p-6 text-center text-gray-500 text-sm">
+                Todavía no elegiste ninguna fecha. Tocá un día del calendario para inscribirte.
+            </div>`;
+        return;
     }
 
-    if (subscriptions.length === 0) {
-        // Mostrar mensaje de lista vacía
-        subscriptionsListContainer.appendChild(emptyListMessage);
-        emptyListMessage.classList.remove('hidden');
-    } else {
-        emptyListMessage.classList.add('hidden');
+    const today = todayIso();
+    [...subscriptions].sort(byDateTime).forEach(sub => {
+        const isBroken = broken.has(eventKey(sub));
+        const isPast = sub.date < today;
+        const item = document.createElement('div');
+        item.className = `flex items-center gap-3 p-3 sm:p-4 border-b border-gray-100 last:border-b-0 ${isPast ? 'opacity-50' : ''}`;
 
-        // Ordenar suscripciones por fecha
-        subscriptions.sort((a, b) => new Date(a.date) - new Date(b.date));
+        let warning = '';
+        if (isBroken) {
+            const { missing } = getLockInfo(sub, subscriptions);
+            warning = `<span class="block text-xs text-amber-700 mt-1">⚠️ Necesitás ${missing.map(m => escapeHtml(m.subj)).join(', ')} en una fecha anterior</span>`;
+        }
 
-        subscriptions.forEach(sub => {
-            const itemEl = document.createElement('div');
-            itemEl.className = 'flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b last:border-b-0 hover:bg-gray-50 transition-colors';
-            
-            const subDate = new Date(sub.date + 'T00:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
-            const colorClass = getColorForSubject(sub.subj);
+        item.innerHTML = `
+            <span class="self-stretch w-1.5 rounded-full shrink-0" style="background:${getColorForSubject(sub.subj)}"></span>
+            <button type="button" class="open-sub flex-1 min-w-0 text-left">
+                <span class="block font-semibold text-gray-900 text-sm sm:text-base">${escapeHtml(sub.subj)}</span>
+                <span class="block text-xs sm:text-sm text-gray-600 mt-0.5 first-letter:uppercase">${formatLongDate(sub.date)} · ${escapeHtml(sub.time)} h · Div ${escapeHtml(sub.div)} · ${escapeHtml(sub.prof || '—')}</span>
+                ${warning}
+            </button>
+            <span class="hidden sm:block text-xs text-gray-500 shrink-0">${isPast ? '' : countdownLabel(sub.date)}</span>
+            <button type="button" class="remove-sub shrink-0 px-3 py-2 text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 active:scale-95 transition-all">
+                Cancelar
+            </button>`;
 
-            itemEl.innerHTML = `
-                <div class="flex items-start space-x-2 sm:space-x-3 mb-2 sm:mb-0 flex-1 min-w-0">
-                    <div class="${colorClass} w-1 h-full rounded-full flex-shrink-0"></div>
-                    <div class="min-w-0 flex-1">
-                        <p class="font-bold text-gray-800 text-sm sm:text-base truncate">${sub.subj}</p>
-                        <p class="text-xs sm:text-sm text-gray-600 mt-1">
-                            📅 ${subDate} - ${sub.time}h
-                        </p>
-                        <p class="text-xs sm:text-sm text-gray-600">
-                            📍 Div. ${sub.div} · ${sub.prof || 'N/A'}
-                        </p>
-                    </div>
-                </div>
-                <button class="remove-sub-button w-full sm:w-auto mt-2 sm:mt-0 px-4 py-2 text-xs sm:text-sm text-white bg-red-500 rounded-lg font-medium hover:bg-red-600 active:bg-red-700 active:scale-95 transition-all shadow-sm flex-shrink-0">
-                    Cancelar
-                </button>
-            `;
-            
-            // Añadir listener al botón "Cancelar"
-            itemEl.querySelector('.remove-sub-button').addEventListener('click', () => {
-                if (confirm(`¿Cancelar inscripción a ${sub.subj}?`)) {
-                    onRemove(sub.subj);
-                }
-            });
-            
-            subscriptionsListContainer.appendChild(itemEl);
+        item.querySelector('.open-sub').addEventListener('click', () => onOpen(sub));
+        item.querySelector('.remove-sub').addEventListener('click', () => {
+            if (confirm(`¿Cancelar inscripción a ${sub.subj}?`)) onRemove(sub);
         });
-    }
+        container.appendChild(item);
+    });
 }

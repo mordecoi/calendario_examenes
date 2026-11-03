@@ -1,131 +1,140 @@
-// Cloud sync using GitHub Raw (read) + Contents API (write)
-// Stores config in localStorage under key 'cloud_sync_config'
+// --- SINCRONIZACIÓN CON GITHUB ---
+// Las inscripciones viven en el archivo subscriptions.json de la rama "data"
+// (no en main), así no se ensucia el historial ni se re-publica GitHub Pages.
+// Leer no requiere token (repo público). Escribir requiere un token guardado
+// en este dispositivo.
 
+const OWNER = 'mordecoi';
+const REPO = 'calendario_examenes';
+const BRANCH = 'data';
+const PATH = 'subscriptions.json';
+const API = `https://api.github.com/repos/${OWNER}/${REPO}`;
 const CONFIG_KEY = 'cloud_sync_config';
 
-export function getCloudConfig() {
-  const raw = localStorage.getItem(CONFIG_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+let lastSha = null;
+let branchChecked = false;
+
+export function getToken() {
+    try {
+        const cfg = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+        return (cfg && typeof cfg.token === 'string') ? cfg.token.trim() : '';
+    } catch {
+        return '';
+    }
 }
 
-export function isCloudConfigured() {
-  const cfg = getCloudConfig();
-  return !!(cfg && cfg.owner && cfg.repo && cfg.branch && cfg.path);
+export function setToken(token) {
+    const t = (token || '').trim();
+    if (t) localStorage.setItem(CONFIG_KEY, JSON.stringify({ token: t }));
+    else localStorage.removeItem(CONFIG_KEY);
 }
 
 export function hasWriteAccess() {
-  const cfg = getCloudConfig();
-  return !!(cfg && cfg.token && cfg.token.trim());
+    return !!getToken();
 }
 
-export function configureCloudInteractive(defaults = {}) {
-  // Pre-configurado para este proyecto, solo pedir el token
-  const owner = 'mordecoi';
-  const repo = 'calendario_examenes';
-  const branch = 'main';
-  const path = 'data/subscriptions.json';
-  
-  const token = prompt(
-    'GitHub Personal Access Token (PAT):\n\n' +
-    'Necesitas permisos: repo > contents (write)\n' +
-    'Crear en: github.com → Settings → Developer settings → Personal access tokens\n\n' +
-    'Déjalo VACÍO para modo SOLO LECTURA (sin sincronización):',
-    defaults.token || ''
-  );
-  
-  // null = usuario canceló (ESC), string vacía = modo solo lectura
-  if (token === null) {
-    return false; // Usuario canceló con ESC
-  }
-
-  const cfg = { owner, repo, branch, path, token: token.trim() };
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-  
-  if (!token.trim()) {
-    alert('📖 Modo solo lectura activado. Puedes ver inscripciones pero no sincronizar a la nube.');
-  } else {
-    alert('✅ Token guardado. Ahora puedes sincronizar tus inscripciones en la nube.');
-  }
-  
-  return true;
+function headers(extra = {}) {
+    const h = { Accept: 'application/vnd.github+json', ...extra };
+    const token = getToken();
+    if (token) h.Authorization = `Bearer ${token}`;
+    return h;
 }
 
-function buildRawUrl(cfg) {
-  return `https://raw.githubusercontent.com/${cfg.owner}/${cfg.repo}/${cfg.branch}/${cfg.path}`;
+function decodeBase64Utf8(b64) {
+    const bin = atob(b64.replace(/\n/g, ''));
+    return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
 }
 
-function buildContentsApiUrl(cfg) {
-  return `https://api.github.com/repos/${cfg.owner}/${cfg.repo}/contents/${cfg.path}`;
+function encodeBase64Utf8(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = '';
+    bytes.forEach(b => { bin += String.fromCharCode(b); });
+    return btoa(bin);
 }
 
+/**
+ * Lee las inscripciones de la nube.
+ * @returns {Promise<{subscriptions: Array, missing: boolean}>}
+ */
 export async function fetchCloudSubscriptions() {
-  const cfg = getCloudConfig();
-  if (!cfg) throw new Error('Cloud no configurado');
-  const res = await fetch(buildRawUrl(cfg), { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`No se pudo leer el JSON remoto (${res.status})`);
-  const json = await res.json();
-  if (!json || !Array.isArray(json.subscriptions)) {
-    throw new Error('Formato inválido en subscriptions.json');
-  }
-  return json;
+    const res = await fetch(`${API}/contents/${PATH}?ref=${BRANCH}`, {
+        headers: headers(),
+        cache: 'no-store'
+    });
+    if (res.status === 404) {
+        lastSha = null;
+        return { subscriptions: [], missing: true };
+    }
+    if (!res.ok) throw new Error(`GitHub respondió ${res.status}`);
+    const json = await res.json();
+    lastSha = json.sha;
+    const data = JSON.parse(decodeBase64Utf8(json.content));
+    if (!data || !Array.isArray(data.subscriptions)) {
+        throw new Error('Formato inválido en subscriptions.json');
+    }
+    return { subscriptions: data.subscriptions, missing: false };
 }
 
-async function getRemoteSha(cfg) {
-  const headers = cfg.token ? { Authorization: `token ${cfg.token}` } : {};
-  const res = await fetch(buildContentsApiUrl(cfg) + `?ref=${cfg.branch}`, { headers });
-  if (!res.ok) {
-    if (res.status === 404) return null; // Archivo no existe aún
-    throw new Error(`No se pudo obtener SHA remoto (${res.status})`);
-  }
-  const json = await res.json();
-  return json.sha;
+async function refreshSha() {
+    const res = await fetch(`${API}/contents/${PATH}?ref=${BRANCH}`, { headers: headers(), cache: 'no-store' });
+    lastSha = res.ok ? (await res.json()).sha : null;
 }
 
+/** Crea la rama "data" a partir de main si todavía no existe */
+async function ensureBranch() {
+    if (branchChecked) return;
+    const res = await fetch(`${API}/git/ref/heads/${BRANCH}`, { headers: headers(), cache: 'no-store' });
+    if (res.status === 404) {
+        const mainRes = await fetch(`${API}/git/ref/heads/main`, { headers: headers(), cache: 'no-store' });
+        if (!mainRes.ok) throw new Error(`No se pudo leer main (${mainRes.status})`);
+        const mainSha = (await mainRes.json()).object.sha;
+        const create = await fetch(`${API}/git/refs`, {
+            method: 'POST',
+            headers: headers({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ ref: `refs/heads/${BRANCH}`, sha: mainSha })
+        });
+        if (!create.ok && create.status !== 422) {
+            throw new Error(`No se pudo crear la rama ${BRANCH} (${create.status})`);
+        }
+        lastSha = null;
+    } else if (!res.ok) {
+        throw new Error(`GitHub respondió ${res.status}`);
+    }
+    branchChecked = true;
+}
+
+function put(subscriptions, sha) {
+    const body = {
+        message: 'chore(subscriptions): update',
+        content: encodeBase64Utf8(JSON.stringify({
+            version: 2,
+            updatedAt: new Date().toISOString(),
+            subscriptions
+        }, null, 2)),
+        branch: BRANCH
+    };
+    if (sha) body.sha = sha;
+    return fetch(`${API}/contents/${PATH}`, {
+        method: 'PUT',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(body)
+    });
+}
+
+/** Guarda las inscripciones en la nube (el último en guardar gana) */
 export async function saveCloudSubscriptions(subscriptions) {
-  const cfg = getCloudConfig();
-  if (!cfg) throw new Error('Cloud no configurado');
-  if (!cfg.token) throw new Error('Se requiere token para guardar en GitHub');
+    if (!hasWriteAccess()) throw new Error('Falta el token de GitHub');
+    await ensureBranch();
 
-  const contentObj = {
-    version: 1,
-    updatedAt: new Date().toISOString(),
-    subscriptions
-  };
-  const contentStr = JSON.stringify(contentObj, null, 2);
-  const contentB64 = btoa(unescape(encodeURIComponent(contentStr)));
-
-  // Obtener SHA actual (si existe)
-  const sha = await getRemoteSha(cfg);
-
-  const body = {
-    message: 'chore(subscriptions): update cloud subscriptions',
-    content: contentB64,
-    branch: cfg.branch
-  };
-  
-  // Solo incluir sha si el archivo ya existe
-  if (sha) {
-    body.sha = sha;
-  }
-
-  const res = await fetch(buildContentsApiUrl(cfg), {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `token ${cfg.token}`
-    },
-    body: JSON.stringify(body)
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Error al guardar en GitHub: ${res.status} ${text}`);
-  }
-
-  return true;
+    let res = await put(subscriptions, lastSha);
+    if (res.status === 409 || res.status === 422) {
+        // El sha cambió (otro dispositivo guardó): tomar el nuevo y reintentar
+        await refreshSha();
+        res = await put(subscriptions, lastSha);
+    }
+    if (res.status === 401 || res.status === 403) {
+        throw new Error('Token inválido o sin permiso de escritura');
+    }
+    if (!res.ok) throw new Error(`GitHub respondió ${res.status}`);
+    lastSha = (await res.json()).content.sha;
 }
