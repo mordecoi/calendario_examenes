@@ -7,6 +7,7 @@ import { renderAgenda } from './agenda.js';
 import { renderNextExam } from './nextExam.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
 import { renderSubscriptions } from './subscriptions.js';
+import { loadFilter, renderFilter } from './filter.js';
 import { eventKey, todayIso } from './utils.js';
 
 const desktop = window.matchMedia('(min-width: 1024px)');
@@ -24,6 +25,8 @@ class App {
     constructor() {
         this.subscriptions = [];
         this.validKeys = new Set();
+        this.subjects = [];
+        this.filter = new Set();
         this.lastRefresh = 0;
         this.syncStatus = 'readonly';
     }
@@ -39,6 +42,8 @@ class App {
             return;
         }
         this.validKeys = new Set(getEvents().map(eventKey));
+        this.subjects = [...new Set(getEvents().map(e => e.subj))].sort();
+        this.filter = loadFilter(this.subjects);
         this.subscriptions = await loadSubscriptions(this.isValid);
         this.lastRefresh = Date.now();
 
@@ -68,14 +73,17 @@ class App {
 
         renderNextExam($('next-exam'), subs, open);
 
-        renderMonths($('months'), getMonths(), subs, {
+        const visible = this.filter.size ? getEvents().filter(e => this.filter.has(e.subj)) : getEvents();
+        renderFilter($('subject-filter'), this.subjects, this.filter, () => this.render());
+
+        renderMonths($('months'), getMonths(), visible, subs, {
             onDayClick: iso => this.jumpToDay(iso),
             renderMonthAgenda: (el, events) => renderAgenda(el, events, subs, { idPrefix: 'am', onEventClick: open })
         });
 
         const aside = $('agenda-aside');
         const scrollTop = aside.scrollTop;
-        renderAgenda($('agenda-list'), getEvents(), subs, { idPrefix: 'ad', groupByMonth: true, onEventClick: open });
+        renderAgenda($('agenda-list'), visible, subs, { idPrefix: 'ad', groupByMonth: true, onEventClick: open });
         aside.scrollTop = scrollTop;
 
         renderSubscriptions($('subscriptions-list'), subs, findBrokenSubscriptions(subs), {

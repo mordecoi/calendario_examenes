@@ -1,5 +1,4 @@
 // --- VISTA DE MESES (2×2 en PC, apilados en el celular) ---
-import { getEvents } from './data.js';
 import { getEventState } from './locks.js';
 import { getColorForSubject, formatMonth, todayIso, byDateTime } from './utils.js';
 
@@ -8,12 +7,12 @@ const WEEKDAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
 /**
  * @param {HTMLElement} container
  * @param {string[]} months - ["2026-11", ...]
+ * @param {Array} events - fechas visibles (ya filtradas)
  * @param {Array} subscriptions
  * @param {{onDayClick: Function, renderMonthAgenda: Function}} handlers
  */
-export function renderMonths(container, months, subscriptions, { onDayClick, renderMonthAgenda }) {
+export function renderMonths(container, months, events, subscriptions, { onDayClick, renderMonthAgenda }) {
     container.innerHTML = '';
-    const events = getEvents();
     const today = todayIso();
 
     months.forEach(ym => {
@@ -23,6 +22,8 @@ export function renderMonths(container, months, subscriptions, { onDayClick, ren
         const section = document.createElement('section');
         section.id = `m-${ym}`;
         section.className = 'month-card bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 scroll-mt-20';
+        // En el celular, con un filtro activo, ocultar meses sin fechas
+        if (!monthEvents.length) section.className += ' hidden lg:block';
 
         const mineCount = monthEvents.filter(e => getEventState(e, subscriptions) === 'subscribed').length;
         section.innerHTML = `
