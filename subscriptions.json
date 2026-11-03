@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:43:25.329Z",
+  "updatedAt": "2026-11-03T21:43:43.850Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -88,6 +88,14 @@
       "div": "A",
       "prof": "PASTARINI",
       "subj": "DISEÑO AVANZADO DE SOFTWARE",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2027-02-05",
+      "time": "18:00",
+      "div": "A",
+      "prof": "FERNANDEZ",
+      "subj": "SISTEMAS INTELIGENTES ARTIFICIALES",
       "loc": "CAMPUS"
     }
   ]
