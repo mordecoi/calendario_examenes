@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:33:37.961Z",
+  "updatedAt": "2026-11-03T21:33:46.858Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -56,6 +56,14 @@
       "div": "A",
       "prof": "PASTARINI",
       "subj": "PROGRAMACIÓN DISTRIBUIDA Y COMPONENTES",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2027-02-17",
+      "time": "18:30",
+      "div": "A",
+      "prof": "DANIELE",
+      "subj": "PROGRAMACIÓN EFICIENTE",
       "loc": "CAMPUS"
     }
   ]
