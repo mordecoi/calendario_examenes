@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:33:46.858Z",
+  "updatedAt": "2026-11-03T21:33:55.483Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -64,6 +64,14 @@
       "div": "A",
       "prof": "DANIELE",
       "subj": "PROGRAMACIÓN EFICIENTE",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2026-11-30",
+      "time": "16:00",
+      "div": "A",
+      "prof": "GENCARELLI",
+      "subj": "PROYECTO TECNOLÓGICO INTEGRADOR",
       "loc": "CAMPUS"
     }
   ]
