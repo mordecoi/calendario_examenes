@@ -81,7 +81,11 @@
     {"date": "2027-03-01", "time": "19:00", "div": "A", "prof": "MIGLIAZZO", "subj": "INGENIERÍA ECONÓMICA", "loc": "CAMPUS"},
     {"date": "2027-03-02", "time": "18:00", "div": "G", "prof": "BARSEGHIAN", "subj": "OPTATIVA I", "loc": "CAMPUS"}
   ],
-  "correlatives": {},
+  "correlatives": {
+    "OPTATIVA II": ["OPTATIVA I"],
+    "DISEÑO AVANZADO DE SOFTWARE": ["PROGRAMACIÓN DISTRIBUIDA Y COMPONENTES"],
+    "PROGRAMACIÓN EFICIENTE": ["PROGRAMACIÓN DISTRIBUIDA Y COMPONENTES", "MÉTODOS NUMÉRICOS"]
+  },
   "locations": {
     "CAMPUS": {
       "address": "DONATO ALVAREZ 380 - (X-5147) - ARGÜELLO - CÓRDOBA - ARGENTINA",
