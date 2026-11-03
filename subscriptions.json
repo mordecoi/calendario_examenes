@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:32:17.720Z",
+  "updatedAt": "2026-11-03T21:33:18.457Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -40,6 +40,14 @@
       "div": "A",
       "prof": "JOAQUÍN",
       "subj": "MÉTODOS NUMÉRICOS",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2026-12-03",
+      "time": "15:00",
+      "div": "A",
+      "prof": "QUINTA",
+      "subj": "OPTATIVA II",
       "loc": "CAMPUS"
     }
   ]
