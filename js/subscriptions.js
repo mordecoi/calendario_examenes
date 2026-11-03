@@ -6,9 +6,9 @@ import { eventKey, getColorForSubject, formatLongDate, countdownLabel, todayIso,
  * @param {HTMLElement} container
  * @param {Array} subscriptions
  * @param {Set<string>} broken - claves de inscripciones sin su correlativa
- * @param {{onOpen: Function, onRemove: Function}} handlers
+ * @param {{onOpen: Function, onRemove: Function, orphans: Set<string>}} handlers
  */
-export function renderSubscriptions(container, subscriptions, broken, { onOpen, onRemove }) {
+export function renderSubscriptions(container, subscriptions, broken, { onOpen, onRemove, orphans = new Set() }) {
     const badge = document.getElementById('subscriptions-badge');
     badge.textContent = subscriptions.length;
     badge.classList.toggle('hidden', subscriptions.length === 0);
@@ -30,7 +30,9 @@ export function renderSubscriptions(container, subscriptions, broken, { onOpen, 
         item.className = `flex items-center gap-3 p-3 sm:p-4 border-b border-gray-100 last:border-b-0 ${isPast ? 'opacity-50' : ''}`;
 
         let warning = '';
-        if (isBroken) {
+        if (orphans.has(eventKey(sub))) {
+            warning = '<span class="block text-xs text-amber-700 mt-1">⚠️ Esta fecha ya no figura en el calendario (¿la cambiaron?). Elegí otra o cancelala.</span>';
+        } else if (isBroken) {
             const { missing } = getLockInfo(sub, subscriptions);
             warning = `<span class="block text-xs text-amber-700 mt-1">⚠️ Necesitás ${missing.map(m => escapeHtml(m.subj)).join(', ')} en una fecha anterior</span>`;
         }

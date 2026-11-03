@@ -7,8 +7,9 @@ import { renderAgenda } from './agenda.js';
 import { renderNextExam } from './nextExam.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
 import { renderSubscriptions } from './subscriptions.js';
-import { loadFilter, renderFilter } from './filter.js';
-import { eventKey, todayIso } from './utils.js';
+import { loadFilter, renderFilter, applyFilter, setMissingFilter } from './filter.js';
+import { renderMyDates } from './summary.js';
+import { eventKey, todayIso, escapeHtml } from './utils.js';
 
 const desktop = window.matchMedia('(min-width: 1024px)');
 const $ = id => document.getElementById(id);
@@ -26,12 +27,33 @@ class App {
         this.subscriptions = [];
         this.validKeys = new Set();
         this.subjects = [];
-        this.filter = new Set();
+        this.filter = { subjects: new Set(), missing: false };
         this.lastRefresh = 0;
         this.syncStatus = 'readonly';
     }
 
-    isValid = sub => this.validKeys.has(eventKey(sub));
+    /**
+     * Ajusta las inscripciones guardadas a las fechas actuales de events.json.
+     * - Si la fecha sigue igual: se queda.
+     * - Si cambió horario/división pero la materia sigue ese día: se actualiza sola.
+     * - Si es de un período anterior: se descarta.
+     * - Si no: se conserva marcada con ⚠️ para que elijas otra (nunca se borra en silencio).
+     */
+    reconcile = subs => {
+        const events = getEvents();
+        const firstDate = events.reduce((min, e) => (e.date < min ? e.date : min), events[0].date);
+        return subs.flatMap(s => {
+            if (this.validKeys.has(eventKey(s))) return [s];
+            if (s.date < firstDate) return [];
+            const match = events.find(e => e.subj === s.subj && e.date === s.date && e.div === s.div)
+                || events.find(e => e.subj === s.subj && e.date === s.date);
+            return [match ? { ...match } : s];
+        });
+    };
+
+    get orphans() {
+        return new Set(this.subscriptions.map(eventKey).filter(k => !this.validKeys.has(k)));
+    }
 
     async init() {
         onSyncStatus((status, detail) => this.setSyncStatus(status, detail));
@@ -44,7 +66,7 @@ class App {
         this.validKeys = new Set(getEvents().map(eventKey));
         this.subjects = [...new Set(getEvents().map(e => e.subj))].sort();
         this.filter = loadFilter(this.subjects);
-        this.subscriptions = await loadSubscriptions(this.isValid);
+        this.subscriptions = await loadSubscriptions(this.reconcile);
         this.lastRefresh = Date.now();
 
         $('period').textContent = getConfig().period || '';
@@ -73,8 +95,23 @@ class App {
 
         renderNextExam($('next-exam'), subs, open);
 
-        const visible = this.filter.size ? getEvents().filter(e => this.filter.has(e.subj)) : getEvents();
-        renderFilter($('subject-filter'), this.subjects, this.filter, () => this.render());
+        const chosen = new Set(subs.map(s => s.subj));
+        const missing = this.subjects.filter(s => !chosen.has(s));
+        const broken = findBrokenSubscriptions(subs);
+        const orphans = this.orphans;
+        const visible = applyFilter(getEvents(), this.filter, subs);
+        renderFilter($('subject-filter'), this.subjects, this.filter, missing.length, () => this.render());
+        $('agenda-hint').textContent = this.filter.missing
+            ? 'Mostrando solo materias sin fecha elegida.'
+            : 'Tocá un día del calendario para saltar acá.';
+
+        renderMyDates($('my-dates'), subs, this.subjects, {
+            broken,
+            orphans,
+            missingOn: this.filter.missing,
+            onOpen: open,
+            onToggleMissing: () => this.toggleMissing()
+        });
 
         renderMonths($('months'), getMonths(), visible, subs, {
             onDayClick: iso => this.jumpToDay(iso),
@@ -86,9 +123,26 @@ class App {
         renderAgenda($('agenda-list'), visible, subs, { idPrefix: 'ad', groupByMonth: true, onEventClick: open });
         aside.scrollTop = scrollTop;
 
-        renderSubscriptions($('subscriptions-list'), subs, findBrokenSubscriptions(subs), {
+        renderSubscriptions($('subscriptions-list'), subs, broken, {
             onOpen: open,
-            onRemove: sub => this.remove(sub)
+            onRemove: sub => this.remove(sub),
+            orphans
+        });
+
+        // Progreso + materias que faltan (al pie, para el celular)
+        $('subscriptions-progress').textContent =
+            `${chosen.size} de ${this.subjects.length} materias con fecha elegida`;
+        const bottom = $('missing-bottom');
+        bottom.innerHTML = missing.length ? `
+            <button type="button" class="w-full text-left text-sm rounded-2xl px-4 py-3 border ${
+                this.filter.missing ? 'bg-amber-500 text-white border-amber-500' : 'bg-amber-50 text-amber-900 border-amber-200'
+            }">
+                <strong>Faltan ${missing.length}:</strong> ${missing.map(escapeHtml).join(', ')}
+                <span class="block mt-1 font-semibold">${this.filter.missing ? 'Mostrando solo estas · tocá para ver todas' : 'Ver solo sus fechas ↑'}</span>
+            </button>` : '';
+        bottom.querySelector('button')?.addEventListener('click', () => {
+            this.toggleMissing();
+            if (this.filter.missing) $('subject-filter').scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
     }
 
@@ -123,6 +177,11 @@ class App {
     }
 
     // ---------- Acciones ----------
+
+    toggleMissing() {
+        setMissingFilter(this.filter, !this.filter.missing);
+        this.render();
+    }
 
     openEvent(event) {
         showModal(event, this.subscriptions, {
@@ -162,7 +221,7 @@ class App {
         if (hasPendingChanges() || Date.now() - this.lastRefresh < 20000) return;
         this.lastRefresh = Date.now();
         const before = JSON.stringify(this.subscriptions);
-        this.subscriptions = await loadSubscriptions(this.isValid);
+        this.subscriptions = await loadSubscriptions(this.reconcile);
         if (JSON.stringify(this.subscriptions) !== before) this.render();
     }
 
@@ -197,7 +256,7 @@ class App {
         );
         if (token === null) return;
         setToken(token);
-        this.subscriptions = await loadSubscriptions(this.isValid);
+        this.subscriptions = await loadSubscriptions(this.reconcile);
         this.render();
         this.toast(hasWriteAccess() ? 'Token guardado: los cambios se sincronizan solos' : 'Modo solo lectura', 'success');
     }

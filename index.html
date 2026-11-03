@@ -85,17 +85,22 @@
                         </h2>
                         <button id="reset-button" type="button" class="text-xs text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-lg">Borrar todo</button>
                     </div>
+                    <p id="subscriptions-progress" class="text-xs text-gray-500 px-1 -mt-2 mb-3"></p>
                     <div id="subscriptions-list" class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden"></div>
+                    <div id="missing-bottom" class="lg:hidden mt-3"></div>
                 </section>
             </div>
 
-            <!-- Columna derecha (solo PC): agenda -->
-            <aside id="agenda-aside" class="hidden lg:block sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto bg-white rounded-2xl shadow-sm border border-gray-200">
-                <div class="px-4 pt-4 pb-2">
-                    <h2 class="text-lg font-bold">Agenda</h2>
-                    <p class="text-xs text-gray-500">Tocá un día del calendario para saltar acá.</p>
+            <!-- Columna derecha (solo PC): mis fechas + agenda -->
+            <aside class="hidden lg:flex flex-col sticky top-20 h-[calc(100vh-6rem)] bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div id="my-dates" class="shrink-0 max-h-[45%] overflow-y-auto border-b border-gray-200 bg-gray-50"></div>
+                <div id="agenda-aside" class="relative flex-1 min-h-0 overflow-y-auto">
+                    <div class="px-4 pt-3 pb-2">
+                        <h2 class="text-lg font-bold">Agenda</h2>
+                        <p id="agenda-hint" class="text-xs text-gray-500">Tocá un día del calendario para saltar acá.</p>
+                    </div>
+                    <div id="agenda-list" class="pb-3"></div>
                 </div>
-                <div id="agenda-list" class="pb-3"></div>
             </aside>
         </div>
     </main>

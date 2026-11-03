@@ -42,6 +42,12 @@ Si cancelás o movés la correlativa, la inscripción que dependía de ella **no
 - `period`: texto que aparece debajo del título.
 - `version`, `lastUpdated`: actualizalos al editar.
 
-## Cambio de período
+## ¿Actualizar fechas borra lo que ya elegí?
 
-Al cargar fechas nuevas, las inscripciones a fechas que ya no existen se descartan solas.
+No. Tus elecciones están en la rama `data` (y en cada dispositivo), separadas de `events.json`. Al cargar
+fechas nuevas:
+
+- Si tu fecha sigue igual, queda igual.
+- Si cambió el horario o la división pero la materia sigue ese mismo día, tu elección se actualiza sola.
+- Si tu fecha desapareció del calendario, se **conserva** marcada con ⚠️ para que elijas otra.
+- Solo se descartan elecciones de un período anterior (fechas antes del primer examen cargado).

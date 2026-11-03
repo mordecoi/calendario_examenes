@@ -49,11 +49,12 @@ function setStatus(status, detail = '') {
 /**
  * Carga las inscripciones. La nube manda, salvo que este dispositivo
  * tenga cambios sin subir (en ese caso se suben).
- * @param {Function} isValid - descarta inscripciones a fechas que ya no existen
+ * @param {Function} normalize - ajusta las inscripciones a las fechas actuales
+ *   (nunca borra una elección del período vigente; ver App.reconcile)
  * @returns {Promise<Array>}
  */
-export async function loadSubscriptions(isValid = () => true) {
-    const local = loadLocalSubscriptions().filter(isValid);
+export async function loadSubscriptions(normalize = subs => subs) {
+    const local = normalize(loadLocalSubscriptions());
     let cloud;
     try {
         cloud = await fetchCloudSubscriptions();
@@ -69,8 +70,13 @@ export async function loadSubscriptions(isValid = () => true) {
         return local;
     }
 
-    const subs = cloud.subscriptions.filter(isValid);
+    const subs = normalize(cloud.subscriptions);
     saveLocalSubscriptions(subs);
+    if (hasWriteAccess() && JSON.stringify(subs) !== JSON.stringify(cloud.subscriptions)) {
+        // Se ajustó alguna inscripción (p. ej. cambió el horario): guardar la versión corregida
+        scheduleSave(subs, SAVE_DELAY_MS);
+        return subs;
+    }
     setStatus(hasWriteAccess() ? 'saved' : 'readonly');
     return subs;
 }
