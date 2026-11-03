@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:31:30.918Z",
+  "updatedAt": "2026-11-03T21:32:02.886Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -16,6 +16,14 @@
       "div": "A",
       "prof": "FUNES",
       "subj": "INFORMÁTICA INDUSTRIAL",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2026-11-27",
+      "time": "18:00",
+      "div": "A",
+      "prof": "MERLO",
+      "subj": "INGENIERÍA DE SOFTWARE II",
       "loc": "CAMPUS"
     }
   ]
