@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:34:00.211Z",
+  "updatedAt": "2026-11-03T21:43:25.329Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -80,6 +80,14 @@
       "div": "A",
       "prof": "MASJOAN",
       "subj": "SEGURIDAD INDUSTRIAL",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2027-02-12",
+      "time": "17:00",
+      "div": "A",
+      "prof": "PASTARINI",
+      "subj": "DISEÑO AVANZADO DE SOFTWARE",
       "loc": "CAMPUS"
     }
   ]
