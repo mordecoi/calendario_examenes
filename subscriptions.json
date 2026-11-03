@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "updatedAt": "2026-11-03T21:33:55.483Z",
+  "updatedAt": "2026-11-03T21:34:00.211Z",
   "subscriptions": [
     {
       "date": "2026-12-01",
@@ -72,6 +72,14 @@
       "div": "A",
       "prof": "GENCARELLI",
       "subj": "PROYECTO TECNOLÓGICO INTEGRADOR",
+      "loc": "CAMPUS"
+    },
+    {
+      "date": "2026-12-02",
+      "time": "19:00",
+      "div": "A",
+      "prof": "MASJOAN",
+      "subj": "SEGURIDAD INDUSTRIAL",
       "loc": "CAMPUS"
     }
   ]
