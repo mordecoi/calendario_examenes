@@ -50,8 +50,24 @@ export function formatMonth(ym) {
 
 /** Días enteros desde hoy hasta la fecha */
 export function daysUntil(iso) {
-    const ms = parseIso(iso) - parseIso(todayIso());
-    return Math.round(ms / 86400000);
+    return daysBetween(todayIso(), iso);
+}
+
+/** Días enteros de isoA a isoB (positivo si B es después) */
+export function daysBetween(isoA, isoB) {
+    return Math.round((parseIso(isoB) - parseIso(isoA)) / 86400000);
+}
+
+/**
+ * Abreviatura corta para mostrar dentro de un círculo:
+ * "MÉTODOS NUMÉRICOS" → "MN", "INGENIERÍA DE SOFTWARE II" → "IS II", "OPTATIVA I" → "OPT I"
+ */
+export function subjectAbbr(subj) {
+    const words = subj.split(/\s+/).filter(w => !['DE', 'Y', 'DEL', 'LA', 'EL'].includes(w));
+    const roman = [];
+    while (words.length > 1 && /^[IVX]+$/.test(words[words.length - 1])) roman.unshift(words.pop());
+    const base = words.length === 1 ? words[0].slice(0, 3) : words.map(w => w[0]).join('');
+    return [base, ...roman].join(' ');
 }
 
 export function countdownLabel(iso) {

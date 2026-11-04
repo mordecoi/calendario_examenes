@@ -7,12 +7,18 @@ import { renderAgenda } from './agenda.js';
 import { renderNextExam } from './nextExam.js';
 import { showModal, closeModal, initModalListeners } from './modal.js';
 import { renderSubscriptions } from './subscriptions.js';
-import { loadFilter, renderFilter, applyFilter, setMissingFilter } from './filter.js';
+import { loadFilter, renderFilter, applyFilter, setMissingFilter, setSubjectFilter } from './filter.js';
+import { renderMountain, scrollToClimber } from './mountain.js';
 import { renderMyDates } from './summary.js';
 import { eventKey, todayIso, escapeHtml } from './utils.js';
 
 const desktop = window.matchMedia('(min-width: 1024px)');
 const $ = id => document.getElementById(id);
+const VIEW_KEY = 'view';
+
+function loadView() {
+    try { return localStorage.getItem(VIEW_KEY) === 'mountain' ? 'mountain' : 'calendar'; } catch { return 'calendar'; }
+}
 
 const SYNC_PILL = {
     saved:    { text: '☁️ Sincronizado', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -30,6 +36,7 @@ class App {
         this.filter = { subjects: new Set(), missing: false };
         this.lastRefresh = 0;
         this.syncStatus = 'readonly';
+        this.view = loadView();
     }
 
     /**
@@ -78,13 +85,59 @@ class App {
         $('sync-pill').addEventListener('click', () => this.onPillClick());
         $('reset-button').addEventListener('click', () => this.resetAll());
 
+        document.querySelectorAll('.view-tab').forEach(tab =>
+            tab.addEventListener('click', () => this.setView(tab.dataset.view)));
+
+        // La montaña se dibuja en píxeles: rehacerla si cambia el ancho
+        let resizeTimer = null;
+        let lastWidth = window.innerWidth;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(() => {
+                if (this.view === 'mountain' && window.innerWidth !== lastWidth) this.render();
+                lastWidth = window.innerWidth;
+            }, 150);
+        });
+
         // Al volver a la pestaña/app, traer cambios hechos en otro dispositivo
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') this.refreshFromCloud();
         });
 
+        this.applyView();
         this.render();
-        this.initialScroll();
+        if (this.view === 'mountain') scrollToClimber($('mountain'));
+        else this.initialScroll();
+    }
+
+    // ---------- Vistas ----------
+
+    applyView() {
+        const mountain = this.view === 'mountain';
+        $('view-calendar').classList.toggle('hidden', mountain);
+        $('view-mountain').classList.toggle('hidden', !mountain);
+        $('next-exam').classList.toggle('hidden', mountain);
+        $('mountain-hud').classList.toggle('hidden', !mountain);
+        document.querySelectorAll('.view-tab').forEach(tab =>
+            tab.setAttribute('aria-selected', String(tab.dataset.view === this.view)));
+    }
+
+    setView(view) {
+        if (view === this.view) return;
+        this.view = view;
+        try { localStorage.setItem(VIEW_KEY, view); } catch { /* sin storage */ }
+        this.applyView();
+        this.render();
+        if (view === 'mountain') scrollToClimber($('mountain'));
+        else window.scrollTo({ top: 0 });
+    }
+
+    /** Tocar un campamento "por elegir": ver esa materia en el calendario */
+    showSubjectInCalendar(subj) {
+        setSubjectFilter(this.filter, [subj]);
+        this.setView('calendar');
+        this.render();
+        $('subject-filter').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     // ---------- Render ----------
@@ -144,6 +197,18 @@ class App {
             this.toggleMissing();
             if (this.filter.missing) $('subject-filter').scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
+
+        if (this.view === 'mountain') {
+            renderMountain($('mountain'), $('mountain-hud'), {
+                events: getEvents(),
+                subscriptions: subs,
+                visible,
+                subjects: this.subjects,
+                today: todayIso(),
+                onOpen: open,
+                onPendingClick: subj => this.showSubjectInCalendar(subj)
+            });
+        }
     }
 
     initialScroll() {

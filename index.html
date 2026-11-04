@@ -25,6 +25,42 @@
 
         #agenda-aside { scrollbar-width: thin; }
 
+        /* --- Montaña --- */
+        .climber { transform: translate(-50%, -100%); animation: bob 1.6s ease-in-out infinite; }
+        @keyframes bob {
+            0%, 100% { transform: translate(-50%, -100%); }
+            50% { transform: translate(-50%, calc(-100% - 4px)); }
+        }
+        .node-next { animation: ring-pulse 1.6s ease-out infinite; }
+        @keyframes ring-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, .7); }
+            100% { box-shadow: 0 0 0 16px rgba(16, 185, 129, 0); }
+        }
+        .node-pop { animation: node-pop .55s ease-out; }
+        @keyframes node-pop {
+            0% { transform: translate(-50%, -50%) scale(.4); }
+            70% { transform: translate(-50%, -50%) scale(1.4); }
+            100% { transform: translate(-50%, -50%) scale(1.15); }
+        }
+        .cloud { animation: drift 14s ease-in-out infinite alternate; }
+        @keyframes drift { from { transform: translateX(-14px); } to { transform: translateX(14px); } }
+        .smoke { transform-box: fill-box; transform-origin: center; animation: smoke 3s ease-out infinite; }
+        @keyframes smoke {
+            0% { opacity: .7; transform: translateY(0) scale(.6); }
+            100% { opacity: 0; transform: translateY(-20px) scale(1.5); }
+        }
+        .trail-draw { transition: stroke-dashoffset .9s ease-in-out; }
+        .route-fade { opacity: 0; animation: fade-in .5s .5s forwards; }
+        @keyframes fade-in { to { opacity: 1; } }
+        .route-out { transition: opacity .3s; opacity: 0; }
+        .view-tab[aria-selected="true"] { background: #111827; color: #fff; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .climber, .node-next, .node-pop, .cloud, .smoke { animation: none !important; }
+            .trail-draw { transition: none !important; }
+            .route-fade { opacity: 1; animation: none; }
+        }
+
         @media (max-width: 640px) {
             #event-modal .modal-content {
                 width: 100vw;
@@ -59,7 +95,15 @@
 
     <main class="max-w-[1400px] mx-auto px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
-        <!-- Próximo examen -->
+        <!-- Vistas -->
+        <div class="flex justify-center">
+            <div role="tablist" aria-label="Vista" class="inline-flex bg-white border border-gray-200 rounded-full p-1 shadow-sm">
+                <button type="button" role="tab" data-view="calendar" aria-selected="true" class="view-tab px-4 py-1.5 rounded-full text-sm font-semibold text-gray-700 transition-colors">📅 Calendario</button>
+                <button type="button" role="tab" data-view="mountain" aria-selected="false" class="view-tab px-4 py-1.5 rounded-full text-sm font-semibold text-gray-700 transition-colors">⛰️ Montaña</button>
+            </div>
+        </div>
+
+        <!-- Próximo examen (Calendario) / marcador del juego (Montaña) -->
         <div id="next-exam"></div>
 
         <div class="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6 lg:items-start">
@@ -68,6 +112,12 @@
             <div class="space-y-4 sm:space-y-6 min-w-0">
                 <div id="subject-filter" class="flex gap-2 overflow-x-auto lg:flex-wrap pb-1 -mx-4 px-4 lg:mx-0 lg:px-0" style="scrollbar-width:none"></div>
 
+                <div id="view-mountain" class="hidden">
+                    <div id="mountain-hud" class="hidden sticky top-16 z-20 mb-3"></div>
+                    <div id="mountain" class="isolate rounded-2xl overflow-hidden shadow-sm border border-gray-200 bg-sky-100"></div>
+                </div>
+
+                <div id="view-calendar" class="space-y-4 sm:space-y-6">
                 <div id="months" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
 
                 <div class="flex items-center gap-4 text-xs text-gray-500 px-1 flex-wrap">
@@ -75,6 +125,7 @@
                     <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-blue-600 ring-2 ring-offset-1 ring-emerald-500"></span> Inscripto</span>
                     <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full border-[1.5px] border-blue-600"></span> Elegiste otra fecha</span>
                     <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-gray-300"></span> Bloqueada (correlativa)</span>
+                </div>
                 </div>
 
                 <section>

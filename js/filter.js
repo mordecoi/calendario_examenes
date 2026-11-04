@@ -39,6 +39,11 @@ export function setMissingFilter(state, value) {
     saveFilter(state);
 }
 
+export function setSubjectFilter(state, subjects) {
+    state.subjects = new Set(subjects);
+    saveFilter(state);
+}
+
 /**
  * @param {HTMLElement} container
  * @param {string[]} subjects - ordenadas
