@@ -50,13 +50,15 @@
             100% { opacity: 0; transform: translateY(-20px) scale(1.5); }
         }
         .trail-draw { transition: stroke-dashoffset .9s ease-in-out; }
+        .river-flow { animation: river-flow 2.4s linear infinite; }
+        @keyframes river-flow { to { stroke-dashoffset: -48; } }
         .route-fade { opacity: 0; animation: fade-in .5s .5s forwards; }
         @keyframes fade-in { to { opacity: 1; } }
         .route-out { transition: opacity .3s; opacity: 0; }
         .view-tab[aria-selected="true"] { background: #111827; color: #fff; }
 
         @media (prefers-reduced-motion: reduce) {
-            .climber, .node-next, .node-pop, .cloud, .smoke { animation: none !important; }
+            .climber, .node-next, .node-pop, .cloud, .smoke, .river-flow { animation: none !important; }
             .trail-draw { transition: none !important; }
             .route-fade { opacity: 1; animation: none; }
         }

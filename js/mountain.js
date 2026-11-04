@@ -12,7 +12,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 const ROW_H = 88;
 const REST_H = 170;
 const BASE_H = 150;
-const SUMMIT_H = 190;
+const SUMMIT_H = 300;
 const REST_MIN_GAP = 5;     // más de 5 días sin exámenes → refugio
 const BASE_ALT = 800;       // metros en el campamento base
 const ALT_STEP = 100;       // metros por día de examen
@@ -54,6 +54,40 @@ export function buildMap(events, today) {
     }
     items.push({ type: 'summit', date: days[days.length - 1], altitude: BASE_ALT + (dayIndex + 1) * ALT_STEP });
     return items;
+}
+
+/** Altura del río que cruza el valle de un refugio, en la posición x */
+function riverYAt(rest, x) {
+    return rest.y + 50 + Math.sin(x / 55 + rest.y) * 8;
+}
+
+/**
+ * Sendero de montaña entre puntos clave: zigzags de lado a lado y, cada tanto,
+ * una bajada (el camino pierde altura antes de volver a subir).
+ */
+function meander(pts, m) {
+    const { W, items } = m;
+    const P = items[items.length - 1].peakY;
+    const out = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1];
+        const b = pts[i];
+        const dy = a.y - b.y;
+        const n = Math.floor(dy / 150);
+        const step = dy / (n + 1);
+        const seed = Math.round(a.y) + Math.round(b.y);
+        for (let k = 1; k <= n; k++) {
+            const f = k / (n + 1);
+            let y = a.y - dy * f;
+            if (k % 3 === 0) y += step * 1.35;
+            const amp = Math.min(W * 0.26, Math.max(W * 0.04, (y - P) * 0.5));
+            const side = (k + seed) % 2 ? 1 : -1;
+            const x = a.x + (b.x - a.x) * f + side * amp * (0.6 + 0.4 * rand(seed, k));
+            out.push({ x: Math.min(W * 0.94, Math.max(W * 0.06, x)), y, kind: 'wp' });
+        }
+        out.push(b);
+    }
+    return out;
 }
 
 function restName(rest) {
@@ -99,8 +133,8 @@ function layout(items, W) {
         }
     });
     const summit = items[n - 1];
-    summit.peakY = summit.top + 34;
-    summit.y = summit.top + 70;
+    summit.peakY = summit.top + 80;
+    summit.y = summit.top + 120;
     return { items, W, H, nodes };
 }
 
@@ -121,27 +155,43 @@ export function buildRoute(subscriptions, m, todayIso) {
         .map((it, i) => ({ it, i }))
         .filter(({ it, i }) => it.type === 'rest' && i > fromIdx && i < toIdx);
 
-    // Puntos del sendero elegido
-    const points = [{ x: base.cx, y: base.y - 18, t: -Infinity, kind: 'base', itemIndex: 0 }];
+    // Cruce de cada refugio: por el puente, justo al lado de la cabaña
+    const restPoints = (it, i) => {
+        const by = riverYAt(it, it.trailX);
+        return [
+            { x: it.trailX, y: by + 26, kind: 'rest', itemIndex: i },
+            { x: it.trailX, y: by - 26, kind: 'rest', itemIndex: i }
+        ];
+    };
+
+    // Puntos clave del sendero elegido
+    const keyPts = [{ x: base.cx, y: base.y - 18, t: -Infinity, kind: 'base', itemIndex: 0 }];
     chosen.forEach(node => {
-        const last = points[points.length - 1];
-        withRests(last.itemIndex, node.itemIndex).forEach(({ it, i }) =>
-            points.push({ x: it.trailX, y: it.y + 8, kind: 'rest', itemIndex: i }));
-        points.push({ x: node.x, y: node.y, t: dayNum(node.event.date), kind: 'stop', key: node.key, itemIndex: node.itemIndex });
+        const last = keyPts[keyPts.length - 1];
+        withRests(last.itemIndex, node.itemIndex).forEach(({ it, i }) => keyPts.push(...restPoints(it, i)));
+        keyPts.push({ x: node.x, y: node.y, t: dayNum(node.event.date), kind: 'stop', key: node.key, itemIndex: node.itemIndex });
     });
-    // Fechas para los refugios intermedios (para ubicar al escalador)
+    const points = meander(keyPts, m);
+    const restsCrossed = new Set(keyPts.filter(p => p.kind === 'rest').map(p => p.itemIndex)).size;
+
+    // Fechas para los puntos intermedios (para ubicar al escalador)
     points.forEach((p, i) => {
-        if (p.kind !== 'rest') return;
-        const prev = points.slice(0, i).reverse().find(q => q.kind !== 'rest');
-        const next = points.slice(i + 1).find(q => q.kind !== 'rest');
-        p.t = prev.t === -Infinity ? next.t - 0.5 : (prev.t + next.t) / 2;
+        if (p.kind === 'stop' || p.kind === 'base') return;
+        let prev = i - 1;
+        while (points[prev].kind !== 'stop' && points[prev].kind !== 'base') prev--;
+        let next = i + 1;
+        while (points[next].kind !== 'stop') next++;
+        p.t = points[prev].t === -Infinity
+            ? points[next].t - 0.5
+            : points[prev].t + (points[next].t - points[prev].t) * (i - prev) / (next - prev);
     });
 
     // Lo que falta hasta la cumbre (punteado)
-    const last = points[points.length - 1];
-    const remaining = [{ x: last.x, y: last.y }];
-    withRests(last.itemIndex, items.length - 1).forEach(({ it }) => remaining.push({ x: it.trailX, y: it.y + 8 }));
-    remaining.push({ x: summit.cx, y: summit.peakY + 6 });
+    const last = keyPts[keyPts.length - 1];
+    const remKey = [{ x: last.x, y: last.y }];
+    withRests(last.itemIndex, items.length - 1).forEach(({ it, i }) => remKey.push(...restPoints(it, i)));
+    remKey.push({ x: summit.cx, y: summit.peakY + 6 });
+    const remaining = meander(remKey, m);
 
     // Escalador: último punto ya pasado y el siguiente
     const today = dayNum(todayIso);
@@ -159,7 +209,7 @@ export function buildRoute(subscriptions, m, todayIso) {
         }
     }
 
-    return { points, remaining, chosen, climber };
+    return { points, remaining, chosen, climber, restsCrossed };
 }
 
 // ---------------------------------------------------------------------------
@@ -219,69 +269,137 @@ function buildStatic(scene, m) {
         <linearGradient id="mt-sky" x1="0" y1="0" x2="0" y2="${H}" gradientUnits="userSpaceOnUse">
             <stop offset="0" stop-color="#7cb3f0"/><stop offset="0.55" stop-color="#cfe6fb"/><stop offset="1" stop-color="#eaf6ff"/>
         </linearGradient>
-        <linearGradient id="mt-rock" x1="0" y1="${H}" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#7fb565"/><stop offset="0.35" stop-color="#93a86d"/>
-            <stop offset="0.6" stop-color="#a1917a"/><stop offset="1" stop-color="#8d8378"/>
-        </linearGradient>
-        <linearGradient id="mt-ridge" x1="0" y1="0" x2="0" y2="${H}" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#a5b4fc" stop-opacity="0.55"/><stop offset="1" stop-color="#c7d2fe" stop-opacity="0.25"/>
-        </linearGradient>`;
+`;
 
     el('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#mt-sky)' }, svg);
     el('circle', { cx: W * 0.84, cy: 70, r: 34, fill: '#fde68a', opacity: 0.9 }, svg);
 
-    // Nubes
-    for (let i = 0; i < 6; i++) {
+    const summit = items[items.length - 1];
+    const P = summit.peakY;
+    const peak = { x: summit.cx, y: P };
+
+    // Roca arriba, pasto abajo
+    const rockStart = Math.max(0.55, 1 - 900 / H);
+    defs.insertAdjacentHTML('beforeend', `
+        <linearGradient id="mt-massif" x1="0" y1="${H}" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#5f9e48"/><stop offset="${f1(rockStart - 0.22)}" stop-color="#7aa35a"/>
+            <stop offset="${f1(rockStart)}" stop-color="#998b74"/><stop offset="1" stop-color="#7f7468"/>
+        </linearGradient>`);
+
+    // Nubes (en el cielo, sobre la cordillera)
+    for (let i = 0; i < 5; i++) {
         const g = el('g', { class: 'cloud', style: `animation-duration:${12 + i * 3}s;animation-delay:-${i * 2}s` }, svg);
-        const cx = W * (0.1 + rand(i, 1) * 0.8);
-        const cy = 40 + (H * 0.55) * (i / 6) + rand(i, 2) * 60;
+        let cx = W * (0.08 + rand(i, 1) * 0.84);
+        if (Math.abs(cx - W / 2) < W * 0.16) cx += (cx < W / 2 ? -1 : 1) * W * 0.22; // no tapar la cumbre
+        const cy = 22 + rand(i, 2) * (P + 90);
         const s = 0.7 + rand(i, 3) * 0.6;
         [[0, 0, 26, 12], [-18, 4, 18, 9], [20, 5, 20, 9]].forEach(([dx, dy, rx, ry]) =>
-            el('ellipse', { cx: cx + dx * s, cy: cy + dy * s, rx: rx * s, ry: ry * s, fill: '#ffffff', opacity: 0.8 }, g));
+            el('ellipse', { cx: cx + dx * s, cy: cy + dy * s, rx: rx * s, ry: ry * s, fill: '#ffffff', opacity: 0.85 }, g));
     }
 
-    // Cordones de fondo
-    el('path', { d: `M 0 ${H * 0.62} L ${W * 0.16} ${H * 0.30} L ${W * 0.34} ${H * 0.48} L ${W * 0.5} ${H * 0.40} L ${W * 0.5} ${H} L 0 ${H} Z`, fill: 'url(#mt-ridge)' }, svg);
-    el('path', { d: `M ${W} ${H * 0.55} L ${W * 0.82} ${H * 0.24} L ${W * 0.64} ${H * 0.44} L ${W * 0.5} ${H * 0.36} L ${W * 0.5} ${H} L ${W} ${H} Z`, fill: 'url(#mt-ridge)' }, svg);
+    // Cordillera lejana (detrás)
+    const far = [[0, 150], [0.07, 70], [0.16, 165], [0.27, 40], [0.38, 145], [0.5, 95], [0.62, 150], [0.73, 30], [0.84, 135], [0.94, 60], [1, 120]];
+    el('path', {
+        d: 'M ' + far.map(([fx, dy]) => `${f1(fx * W)} ${f1(P + dy)}`).join(' L ') + ` L ${W} ${P + 600} L 0 ${P + 600} Z`,
+        fill: '#a5b4fc', opacity: 0.5
+    }, svg);
 
-    // Montaña principal: borde que sigue el ancho de cada fila
-    const summit = items[items.length - 1];
-    const left = [];
-    const right = [];
-    items.slice(0, -1).forEach(it => {
-        const hw = it.type === 'base' ? W / 2 : Math.min(W / 2 - 4, it.spread / 2 + 28);
-        left.push({ x: it.cx - hw, y: it.y });
-        right.push({ x: it.cx + hw, y: it.y });
+    // Macizo principal: ancho abajo y con varias cumbres arriba (la del medio es la cumbre)
+    const ridgeKeys = [[0, 420], [0.1, 110], [0.2, 200], [0.3, 60], [0.4, Math.min(130, W * 0.25)], [0.5, 0],
+        [0.6, Math.min(130, W * 0.25)], [0.7, 60], [0.8, 200], [0.9, 110], [1, 400]];
+    const ridge = [];
+    ridgeKeys.forEach(([fx, dy], k) => {
+        const pt = { x: fx * W, y: P + dy };
+        if (k > 0) {
+            const prev = ridge[ridge.length - 1];
+            for (let sub = 1; sub <= 2; sub++) {
+                const f = sub / 3;
+                ridge.push({ x: prev.x + (pt.x - prev.x) * f, y: prev.y + (pt.y - prev.y) * f + (rand(k, sub) - 0.5) * 22 });
+            }
+        }
+        ridge.push(pt);
     });
-    const peak = { x: summit.cx, y: summit.peakY };
-    const outline = [{ x: 0, y: H }, ...left, { x: summit.cx - 30, y: summit.peakY + 40 }, peak,
-        { x: summit.cx + 30, y: summit.peakY + 40 }, ...right.reverse(), { x: W, y: H }];
-    const mountainD = splinePath(outline) + ' Z';
-    el('path', { d: mountainD, fill: 'url(#mt-rock)' }, svg);
+    const massifD = `M 0 ${H} ` + ridge.map(q => `L ${f1(q.x)} ${f1(q.y)}`).join(' ') + ` L ${W} ${H} Z`;
+    el('path', { d: massifD, fill: 'url(#mt-massif)' }, svg);
 
-    // Nieve en la punta (recortada con borde dentado)
-    const snowLine = summit.bottom + ROW_H * 3;
+    // Nieve en las cumbres (recortada con borde dentado)
+    const snowLine = P + 150;
     const jag = [];
     for (let x = W, k = 0; x > -14; x -= 14, k++) {
         jag.push(`${f1(Math.max(0, x))},${f1(snowLine + (k % 2 ? 10 : -6) + rand(k, 9) * 8)}`);
     }
     defs.insertAdjacentHTML('beforeend', `<clipPath id="mt-snow"><polygon points="0,0 ${W},0 ${jag.join(' ')}"/></clipPath>`);
-    el('path', { d: mountainD, fill: '#f8fafc', 'clip-path': 'url(#mt-snow)' }, svg);
+    el('path', { d: massifD, fill: '#f8fafc', 'clip-path': 'url(#mt-snow)' }, svg);
 
-    // Árboles en las laderas bajas
+    // Sombra en la ladera derecha de cada cumbre
+    [[0.1, 110], [0.3, 60], [0.5, 0], [0.7, 60], [0.9, 110]].forEach(([fx, dy]) => {
+        const px = fx * W;
+        const py = P + dy;
+        el('polygon', {
+            points: `${f1(px)},${f1(py)} ${f1(px + W * 0.09)},${f1(py + W * 0.16 + 40)} ${f1(px + W * 0.015)},${f1(py + W * 0.3 + 60)}`,
+            fill: '#1c1917', opacity: 0.1
+        }, svg);
+    });
+
+    // Curvas de nivel (como un mapa topográfico)
+    for (let y = P + 330, k = 0; y < H - 120; y += 260, k++) {
+        const pts = [];
+        for (let x = -20; x <= W + 20; x += 40) {
+            pts.push({ x, y: y + Math.sin(x / 90 + k) * 14 + Math.sin(x / 37 + k * 2) * 5 });
+        }
+        el('path', { d: splinePath(pts), fill: 'none', stroke: '#1c1917', 'stroke-opacity': 0.08, 'stroke-width': 1.5 }, svg);
+    }
+
+    // Ríos en los valles de los refugios, con un puente donde cruza el sendero
     items.forEach((it, i) => {
-        if (it.t > 0.55 || it.type === 'summit') return;
-        [-1, 1].forEach((side, k) => {
-            const reps = it.type === 'base' ? 3 : 1;
-            for (let r = 0; r < reps; r++) {
-                const x = it.cx + side * (it.spread / 2 + 6 + rand(i, k + r * 3) * (it.type === 'base' ? W * 0.12 : 16));
-                const y = it.y + (rand(i, k + 5 + r) - 0.5) * 30;
-                if (x < 8 || x > W - 8) continue;
-                const s = 0.8 + rand(i, k + 7 + r) * 0.5;
-                el('rect', { x: x - 1.5 * s, y: y + 6 * s, width: 3 * s, height: 6 * s, fill: '#5b3a1e' }, svg);
-                el('polygon', { points: `${x},${y - 16 * s} ${x - 8 * s},${y + 7 * s} ${x + 8 * s},${y + 7 * s}`, fill: i % 3 ? '#2f6b3a' : '#3d7f47' }, svg);
+        if (it.type !== 'rest') return;
+        const pts = [];
+        for (let x = -20; x <= W + 20; x += 30) pts.push({ x, y: riverYAt(it, x) });
+        const d = splinePath(pts);
+        el('path', { d, fill: 'none', stroke: '#1d4ed8', 'stroke-width': 19, 'stroke-linecap': 'round', opacity: 0.55 }, svg);
+        el('path', { d, fill: 'none', stroke: '#60a5fa', 'stroke-width': 13, 'stroke-linecap': 'round' }, svg);
+        el('path', { d, fill: 'none', stroke: '#dbeafe', 'stroke-width': 2, 'stroke-dasharray': '8 16', 'stroke-linecap': 'round', class: 'river-flow' }, svg);
+        const by = riverYAt(it, it.trailX);
+        const bridge = el('g', { transform: `translate(${f1(it.trailX)} ${f1(by)})`, 'data-bridge': i }, svg);
+        bridge.innerHTML = `
+            <rect x="-11" y="-18" width="22" height="36" rx="2" fill="#a16207"/>
+            ${[-12, -6, 0, 6, 12].map(yy => `<line x1="-11" x2="11" y1="${yy}" y2="${yy}" stroke="#713f12" stroke-width="1.2"/>`).join('')}
+            <line x1="-12.5" x2="-12.5" y1="-19" y2="19" stroke="#57534e" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="12.5" x2="12.5" y1="-19" y2="19" stroke="#57534e" stroke-width="2.5" stroke-linecap="round"/>`;
+    });
+
+    // Rocas sueltas
+    items.forEach((it, i) => {
+        if (it.type !== 'day' || i % 2) return;
+        const x = W * (0.05 + rand(i, 21) * 0.9);
+        if (it.nodes.some(nd => Math.abs(nd.x - x) < 32)) return;
+        const y = it.top + 6 + rand(i, 22) * 10;
+        const s = 0.7 + rand(i, 23) * 0.7;
+        el('polygon', { points: `${f1(x - 10 * s)},${f1(y + 5 * s)} ${f1(x - 6 * s)},${f1(y - 4 * s)} ${f1(x + 2 * s)},${f1(y - 7 * s)} ${f1(x + 10 * s)},${f1(y + 5 * s)}`, fill: '#78716c' }, svg);
+        el('polygon', { points: `${f1(x - 6 * s)},${f1(y - 4 * s)} ${f1(x + 2 * s)},${f1(y - 7 * s)} ${f1(x)},${f1(y)}`, fill: '#a8a29e' }, svg);
+    });
+
+    // Bosque en las laderas bajas
+    items.forEach((it, i) => {
+        if (it.t > 0.6 || it.type === 'summit') return;
+        const count = it.type === 'base' ? 8 : it.type === 'rest' ? 5 : 3;
+        for (let r = 0; r < count; r++) {
+            const x = W * (0.03 + rand(i, r + 30) * 0.94);
+            let y;
+            if (it.type === 'base') {
+                if (Math.abs(x - it.cx) < 70) continue;
+                y = it.y + (rand(i, r + 40) - 0.5) * 70;
+            } else if (it.type === 'rest') {
+                if (Math.abs(x - it.cx) < 60 || Math.abs(x - it.trailX) < 24) continue;
+                y = it.top + 12 + rand(i, r + 40) * 26;
+            } else {
+                if (it.nodes.some(nd => Math.abs(nd.x - x) < 26)) continue;
+                y = it.top + 6 + rand(i, r + 40) * 12;
             }
-        });
+            const s = 0.8 + rand(i, r + 50) * 0.5;
+            el('rect', { x: f1(x - 1.5 * s), y: f1(y + 6 * s), width: f1(3 * s), height: f1(6 * s), fill: '#5b3a1e' }, svg);
+            el('polygon', { points: `${f1(x)},${f1(y - 16 * s)} ${f1(x - 8 * s)},${f1(y + 7 * s)} ${f1(x + 8 * s)},${f1(y + 7 * s)}`, fill: (i + r) % 3 ? '#2f6b3a' : '#3d7f47' }, svg);
+        }
     });
 
     // Refugios (estáticos)
@@ -387,14 +505,14 @@ function drawRoute(scene, m, route, broken) {
     const d = points.length > 1 ? splinePath(points) : '';
     if (d) {
         el('path', { d, fill: 'none', stroke: '#ffffff', 'stroke-width': 13, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.55, class: 'route-fade' }, g);
-        const main = el('path', { d, fill: 'none', stroke: '#b7793f', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'main-trail' }, g);
+        const main = el('path', { d, fill: 'none', stroke: '#b7793f', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'main-trail', 'data-rests': route.restsCrossed }, g);
         el('path', { d, fill: 'none', stroke: '#fef3c7', 'stroke-width': 2, 'stroke-dasharray': '5 9', 'stroke-linecap': 'round', class: 'route-fade' }, g);
 
         // Tramos cortados (correlativa sin cumplir)
         points.forEach((p, i) => {
             if (i === 0 || p.kind !== 'stop' || !broken.has(p.key)) return;
             let from = i - 1;
-            while (from > 0 && points[from].kind === 'rest') from--;
+            while (from > 0 && points[from].kind !== 'stop' && points[from].kind !== 'base') from--;
             for (let s = from; s < i; s++) {
                 el('path', { d: segmentPath(points, s), fill: 'none', stroke: '#dc2626', 'stroke-width': 4, 'stroke-dasharray': '5 6', 'stroke-linecap': 'round', class: 'broken-trail' }, g);
             }
