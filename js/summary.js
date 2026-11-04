@@ -1,5 +1,6 @@
 // --- RESUMEN "MIS FECHAS" (columna derecha en PC) ---
 import { eventKey, getColorForSubject, formatShortDate, todayIso, byDateTime, escapeHtml } from './utils.js';
+import { isActive } from './locks.js';
 
 /**
  * @param {HTMLElement} container
@@ -8,7 +9,7 @@ import { eventKey, getColorForSubject, formatShortDate, todayIso, byDateTime, es
  * @param {{broken: Set<string>, orphans: Set<string>, missingOn: boolean, onOpen: Function, onToggleMissing: Function}} opts
  */
 export function renderMyDates(container, subscriptions, subjects, { broken, orphans, missingOn, onOpen, onToggleMissing }) {
-    const chosen = new Set(subscriptions.map(s => s.subj));
+    const chosen = new Set(subscriptions.filter(isActive).map(s => s.subj));
     const missing = subjects.filter(s => !chosen.has(s));
     const pct = subjects.length ? Math.round((chosen.size / subjects.length) * 100) : 0;
     const today = todayIso();
@@ -43,10 +44,12 @@ export function renderMyDates(container, subscriptions, subjects, { broken, orph
     [...subscriptions].sort(byDateTime).forEach(sub => {
         const key = eventKey(sub);
         const warn = orphans.has(key) ? ' <span title="Esta fecha ya no está en el calendario">⚠️</span>'
-            : broken.has(key) ? ' <span title="Falta la correlativa en una fecha anterior">⚠️</span>' : '';
+            : broken.has(key) ? ' <span title="Camino cortado: falta la correlativa">⚠️</span>'
+            : sub.result === 'passed' ? ' <span title="Aprobada">✅</span>'
+            : sub.result === 'failed' ? ' <span title="No aprobada">❌</span>' : '';
         const li = document.createElement('li');
         li.innerHTML = `
-            <button type="button" class="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-50 ${sub.date < today ? 'opacity-50' : ''}">
+            <button type="button" class="w-full flex items-center gap-2 rounded-lg px-2 py-1.5 text-left hover:bg-gray-50 ${sub.result === 'failed' || (sub.date < today && !sub.result) ? 'opacity-50' : ''}">
                 <span class="w-2 h-2 rounded-full shrink-0" style="background:${getColorForSubject(sub.subj)}"></span>
                 <span class="flex-1 min-w-0 truncate text-xs font-medium text-gray-900">${escapeHtml(sub.subj)}${warn}</span>
                 <span class="shrink-0 text-xs text-gray-500 tabular-nums">${formatShortDate(sub.date)} · ${escapeHtml(sub.time)}</span>

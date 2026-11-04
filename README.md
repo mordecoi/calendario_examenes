@@ -7,6 +7,10 @@ Web para elegir fechas de finales (Noviembre 2026 – Marzo 2027), publicada con
 - Arriba, la tarjeta **Próximo examen** con la cuenta regresiva.
 - **Correlativas:** una materia queda bloqueada 🔒 hasta que te inscribas a su correlativa en una fecha **anterior**.
 - Tus inscripciones se **sincronizan solas** entre dispositivos.
+- **Resultados:** en cada fecha tuya podés marcar ✅ Aprobé o ❌ No aprobé (en el detalle o en
+  "Mis inscripciones"). Si no aprobás una correlativa, se corta el camino de las materias que dependen
+  de ella y la materia vuelve a "Sin elegir" para que elijas otra fecha.
+- **Modo oscuro** suave (botón 🌙/☀️; por defecto sigue al sistema). La montaña se vuelve de noche.
 - Vista **⛰️ Montaña**: el período como una montaña para escalar. Cada fecha es un lugar fijo
   (abajo noviembre, arriba marzo); tu sendero une las fechas que elegiste y se redibuja al cambiarlas.
   Los refugios 🏠 marcan los tramos de más de 5 días sin exámenes y no se mueven.
@@ -23,7 +27,8 @@ js/agenda.js          Lista de fechas (columna derecha en PC, debajo de cada mes
 js/nextExam.js        Tarjeta "Próximo examen"
 js/modal.js           Detalle de una fecha + inscribirse / cambiar / cancelar
 js/subscriptions.js   "Mis inscripciones"
-js/locks.js           Lógica de correlativas
+js/locks.js           Correlativas y resultados (aprobada / no aprobada)
+js/theme.js           Modo oscuro
 js/storage.js         localStorage + guardado automático en la nube
 js/cloud.js           Lectura/escritura en GitHub
 js/utils.js           Fechas, colores, helpers

@@ -1,5 +1,5 @@
 // --- VISTA DE MESES (2×2 en PC, apilados en el celular) ---
-import { getEventState } from './locks.js';
+import { getEventState, isMine } from './locks.js';
 import { getColorForSubject, formatMonth, todayIso, byDateTime } from './utils.js';
 
 const WEEKDAYS = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
@@ -25,7 +25,7 @@ export function renderMonths(container, months, events, subscriptions, { onDayCl
         // En el celular, con un filtro activo, ocultar meses sin fechas
         if (!monthEvents.length) section.className += ' hidden lg:block';
 
-        const mineCount = monthEvents.filter(e => getEventState(e, subscriptions) === 'subscribed').length;
+        const mineCount = monthEvents.filter(e => isMine(getEventState(e, subscriptions))).length;
         section.innerHTML = `
             <div class="flex items-baseline justify-between mb-3 px-1">
                 <h2 class="text-lg sm:text-xl font-bold text-gray-900">${formatMonth(ym)}</h2>
@@ -69,7 +69,8 @@ function buildDayCell(iso, day, dayEvents, subscriptions, today, onDayClick) {
     const isPast = iso < today;
     const isToday = iso === today;
     const states = dayEvents.map(e => getEventState(e, subscriptions));
-    const mine = dayEvents.filter((e, i) => states[i] === 'subscribed');
+    const mine = dayEvents.filter((e, i) => isMine(states[i]));
+    const onlyFailed = mine.length > 0 && mine.every((e, i) => states[dayEvents.indexOf(e)] === 'failed');
 
     const cell = document.createElement(dayEvents.length ? 'button' : 'div');
     cell.dataset.date = iso;
@@ -77,7 +78,9 @@ function buildDayCell(iso, day, dayEvents, subscriptions, today, onDayClick) {
     if (dayEvents.length) {
         cls += ' bg-gray-50 hover:bg-blue-50 active:bg-blue-100 cursor-pointer';
     }
-    if (mine.length) {
+    if (onlyFailed) {
+        cls += ' ring-2 ring-red-400 bg-red-50';
+    } else if (mine.length) {
         cls += ' ring-2 ring-emerald-500 bg-emerald-50';
     }
     if (isToday) {
@@ -105,20 +108,25 @@ function buildDayCell(iso, day, dayEvents, subscriptions, today, onDayClick) {
             } else {
                 dot.style.background = getColorForSubject(e.subj);
             }
-            if (state === 'subscribed') dot.className += ' ring-2 ring-offset-1 ring-emerald-500';
+            if (state === 'subscribed' || state === 'passed') dot.className += ' ring-2 ring-offset-1 ring-emerald-500';
+            if (state === 'failed') {
+                dot.style.opacity = '0.4';
+                dot.className += ' ring-2 ring-offset-1 ring-red-400';
+            }
             dots.appendChild(dot);
         });
         cell.appendChild(dots);
 
         if (mine.length) {
             const check = document.createElement('span');
-            check.className = 'absolute top-0.5 right-1 text-[10px] text-emerald-600 font-bold';
-            check.textContent = '✓';
+            const passedHere = dayEvents.some((e, i) => states[i] === 'passed');
+            check.className = `absolute top-0.5 right-1 text-[10px] font-bold ${onlyFailed ? 'text-red-500' : 'text-emerald-600'}`;
+            check.textContent = onlyFailed ? '✗' : passedHere ? '★' : '✓';
             cell.appendChild(check);
         }
 
         cell.title = dayEvents
-            .map((e, i) => `${e.time} · Div ${e.div} · ${e.subj}${states[i] === 'subscribed' ? ' ✓' : states[i] === 'locked' ? ' 🔒' : ''}`)
+            .map((e, i) => `${e.time} · Div ${e.div} · ${e.subj}${{ subscribed: ' ✓', passed: ' ✅', failed: ' ❌', locked: ' 🔒' }[states[i]] || ''}`)
             .join('\n');
         cell.setAttribute('aria-label', `${iso}: ${dayEvents.length} exámenes`);
         cell.addEventListener('click', () => onDayClick(iso));

@@ -3,6 +3,7 @@
 // "Sin elegir": solo materias a las que todavía no les elegiste fecha.
 // Se recuerdan en este dispositivo.
 import { getColorForSubject, escapeHtml } from './utils.js';
+import { isActive } from './locks.js';
 
 const FILTER_KEY = 'subject_filter';
 const MISSING_KEY = 'missing_filter';
@@ -27,7 +28,7 @@ function saveFilter(state) {
 
 /** Aplica los filtros a la lista de fechas */
 export function applyFilter(events, state, subscriptions) {
-    const chosen = new Set(subscriptions.map(s => s.subj));
+    const chosen = new Set(subscriptions.filter(isActive).map(s => s.subj));
     return events.filter(e =>
         (!state.subjects.size || state.subjects.has(e.subj)) &&
         (!state.missing || !chosen.has(e.subj))

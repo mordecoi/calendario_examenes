@@ -5,7 +5,7 @@ import { getColorForSubject, formatLongDate, countdownLabel, todayIso, byDateTim
 
 export function renderNextExam(container, subscriptions, onEventClick) {
     const today = todayIso();
-    const upcomingMine = subscriptions.filter(s => s.date >= today).sort(byDateTime);
+    const upcomingMine = subscriptions.filter(s => s.date >= today && !s.result).sort(byDateTime);
 
     let event = upcomingMine[0];
     let label = 'Tu próximo examen';

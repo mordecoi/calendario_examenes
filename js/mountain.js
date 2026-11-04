@@ -2,7 +2,8 @@
 // Mapa fijo: cada fecha de examen es un lugar fijo de la montaña (abajo = noviembre, arriba = marzo).
 // Capa estática: cielo, montaña, árboles, refugios, hitos de altura. Se arma una sola vez (o al cambiar el ancho).
 // Capa dinámica: tu sendero (las fechas elegidas), senderos laterales, estados de cada fecha y el escalador.
-import { getEventState, findBrokenSubscriptions } from './locks.js';
+import { getEventState, findBrokenSubscriptions, isActive, isMine } from './locks.js';
+import { isDark } from './theme.js';
 import {
     eventKey, byDateTime, daysBetween, parseIso, formatShortDate, formatMonth, MONTHS_SHORT,
     getColorForSubject, subjectAbbr, escapeHtml, countdownLabel
@@ -19,6 +20,27 @@ const ALT_STEP = 100;       // metros por día de examen
 const NODE = 34;            // diámetro de cada fecha
 
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+// Paleta de día y de noche (modo oscuro)
+const PALETTES = {
+    day: {
+        sky: ['#7cb3f0', '#cfe6fb', '#eaf6ff'], cloud: '#ffffff', cloudOpacity: 0.85,
+        far: '#a5b4fc', farOpacity: 0.5, massif: ['#5f9e48', '#7aa35a', '#998b74', '#7f7468'],
+        snow: '#f8fafc', shade: 0.1, contour: '#1c1917', contourOpacity: 0.08,
+        river: ['#1d4ed8', '#60a5fa', '#dbeafe'], rock: ['#78716c', '#a8a29e'],
+        trunk: '#5b3a1e', trees: ['#2f6b3a', '#3d7f47'], camps: 'from-[#7fb565] to-[#5f9a4a]',
+        otherBg: '#ffffff', lockedBg: '#d6d3d1', lockedFg: '#57534e', trailEdge: '#ffffff', night: false
+    },
+    night: {
+        sky: ['#0f1a33', '#1d2b4d', '#2a3a5e'], cloud: '#94a3b8', cloudOpacity: 0.3,
+        far: '#3b4775', farOpacity: 0.6, massif: ['#2c4f30', '#38563a', '#4a4650', '#3f3b45'],
+        snow: '#c8d1e0', shade: 0.2, contour: '#ffffff', contourOpacity: 0.05,
+        river: ['#1e3a8a', '#3563c9', '#a5c4f5'], rock: ['#4b4a52', '#6b6a73'],
+        trunk: '#3a2a1c', trees: ['#1d4429', '#275535'], camps: 'from-[#2f5233] to-[#24412a]',
+        otherBg: '#20242d', lockedBg: '#4a4f5c', lockedFg: '#c3c8d2', trailEdge: '#0f172a', night: true
+    }
+};
+const palette = () => (isDark() ? PALETTES.night : PALETTES.day);
 
 // Estado del módulo (para no rehacer la capa estática y animar cambios)
 let staticSig = null;
@@ -260,6 +282,7 @@ function el(tag, attrs = {}, parent) {
 
 function buildStatic(scene, m) {
     const { items, W, H } = m;
+    const C = palette();
     scene.innerHTML = '';
     scene.style.height = `${H}px`;
 
@@ -267,12 +290,27 @@ function buildStatic(scene, m) {
     const defs = el('defs', {}, svg);
     defs.innerHTML = `
         <linearGradient id="mt-sky" x1="0" y1="0" x2="0" y2="${H}" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#7cb3f0"/><stop offset="0.55" stop-color="#cfe6fb"/><stop offset="1" stop-color="#eaf6ff"/>
+            <stop offset="0" stop-color="${C.sky[0]}"/><stop offset="0.55" stop-color="${C.sky[1]}"/><stop offset="1" stop-color="${C.sky[2]}"/>
         </linearGradient>
 `;
 
     el('rect', { x: 0, y: 0, width: W, height: H, fill: 'url(#mt-sky)' }, svg);
-    el('circle', { cx: W * 0.84, cy: 70, r: 34, fill: '#fde68a', opacity: 0.9 }, svg);
+    if (C.night) {
+        // Estrellas y luna
+        for (let i = 0; i < 60; i++) {
+            el('circle', {
+                cx: f1(rand(i, 61) * W), cy: f1(rand(i, 62) * (items[items.length - 1].peakY + 260)),
+                r: f1(0.6 + rand(i, 63) * 1.1), fill: '#ffffff', class: 'star',
+                style: `animation-delay:-${f1(rand(i, 64) * 3)}s`
+            }, svg);
+        }
+        el('circle', { cx: W * 0.84, cy: 70, r: 48, fill: '#e2e8f0', opacity: 0.1 }, svg);
+        el('circle', { cx: W * 0.84, cy: 70, r: 26, fill: '#e2e8f0' }, svg);
+        el('circle', { cx: W * 0.84 - 8, cy: 64, r: 5, fill: '#cbd5e1' }, svg);
+        el('circle', { cx: W * 0.84 + 9, cy: 78, r: 3.5, fill: '#cbd5e1' }, svg);
+    } else {
+        el('circle', { cx: W * 0.84, cy: 70, r: 34, fill: '#fde68a', opacity: 0.9 }, svg);
+    }
 
     const summit = items[items.length - 1];
     const P = summit.peakY;
@@ -282,8 +320,8 @@ function buildStatic(scene, m) {
     const rockStart = Math.max(0.55, 1 - 900 / H);
     defs.insertAdjacentHTML('beforeend', `
         <linearGradient id="mt-massif" x1="0" y1="${H}" x2="0" y2="0" gradientUnits="userSpaceOnUse">
-            <stop offset="0" stop-color="#5f9e48"/><stop offset="${f1(rockStart - 0.22)}" stop-color="#7aa35a"/>
-            <stop offset="${f1(rockStart)}" stop-color="#998b74"/><stop offset="1" stop-color="#7f7468"/>
+            <stop offset="0" stop-color="${C.massif[0]}"/><stop offset="${f1(rockStart - 0.22)}" stop-color="${C.massif[1]}"/>
+            <stop offset="${f1(rockStart)}" stop-color="${C.massif[2]}"/><stop offset="1" stop-color="${C.massif[3]}"/>
         </linearGradient>`);
 
     // Nubes (en el cielo, sobre la cordillera)
@@ -294,14 +332,14 @@ function buildStatic(scene, m) {
         const cy = 22 + rand(i, 2) * (P + 90);
         const s = 0.7 + rand(i, 3) * 0.6;
         [[0, 0, 26, 12], [-18, 4, 18, 9], [20, 5, 20, 9]].forEach(([dx, dy, rx, ry]) =>
-            el('ellipse', { cx: cx + dx * s, cy: cy + dy * s, rx: rx * s, ry: ry * s, fill: '#ffffff', opacity: 0.85 }, g));
+            el('ellipse', { cx: cx + dx * s, cy: cy + dy * s, rx: rx * s, ry: ry * s, fill: C.cloud, opacity: C.cloudOpacity }, g));
     }
 
     // Cordillera lejana (detrás)
     const far = [[0, 150], [0.07, 70], [0.16, 165], [0.27, 40], [0.38, 145], [0.5, 95], [0.62, 150], [0.73, 30], [0.84, 135], [0.94, 60], [1, 120]];
     el('path', {
         d: 'M ' + far.map(([fx, dy]) => `${f1(fx * W)} ${f1(P + dy)}`).join(' L ') + ` L ${W} ${P + 600} L 0 ${P + 600} Z`,
-        fill: '#a5b4fc', opacity: 0.5
+        fill: C.far, opacity: C.farOpacity
     }, svg);
 
     // Macizo principal: ancho abajo y con varias cumbres arriba (la del medio es la cumbre)
@@ -329,7 +367,7 @@ function buildStatic(scene, m) {
         jag.push(`${f1(Math.max(0, x))},${f1(snowLine + (k % 2 ? 10 : -6) + rand(k, 9) * 8)}`);
     }
     defs.insertAdjacentHTML('beforeend', `<clipPath id="mt-snow"><polygon points="0,0 ${W},0 ${jag.join(' ')}"/></clipPath>`);
-    el('path', { d: massifD, fill: '#f8fafc', 'clip-path': 'url(#mt-snow)' }, svg);
+    el('path', { d: massifD, fill: C.snow, 'clip-path': 'url(#mt-snow)' }, svg);
 
     // Sombra en la ladera derecha de cada cumbre
     [[0.1, 110], [0.3, 60], [0.5, 0], [0.7, 60], [0.9, 110]].forEach(([fx, dy]) => {
@@ -337,7 +375,7 @@ function buildStatic(scene, m) {
         const py = P + dy;
         el('polygon', {
             points: `${f1(px)},${f1(py)} ${f1(px + W * 0.09)},${f1(py + W * 0.16 + 40)} ${f1(px + W * 0.015)},${f1(py + W * 0.3 + 60)}`,
-            fill: '#1c1917', opacity: 0.1
+            fill: '#000000', opacity: C.shade
         }, svg);
     });
 
@@ -347,7 +385,7 @@ function buildStatic(scene, m) {
         for (let x = -20; x <= W + 20; x += 40) {
             pts.push({ x, y: y + Math.sin(x / 90 + k) * 14 + Math.sin(x / 37 + k * 2) * 5 });
         }
-        el('path', { d: splinePath(pts), fill: 'none', stroke: '#1c1917', 'stroke-opacity': 0.08, 'stroke-width': 1.5 }, svg);
+        el('path', { d: splinePath(pts), fill: 'none', stroke: C.contour, 'stroke-opacity': C.contourOpacity, 'stroke-width': 1.5 }, svg);
     }
 
     // Ríos en los valles de los refugios, con un puente donde cruza el sendero
@@ -356,9 +394,9 @@ function buildStatic(scene, m) {
         const pts = [];
         for (let x = -20; x <= W + 20; x += 30) pts.push({ x, y: riverYAt(it, x) });
         const d = splinePath(pts);
-        el('path', { d, fill: 'none', stroke: '#1d4ed8', 'stroke-width': 19, 'stroke-linecap': 'round', opacity: 0.55 }, svg);
-        el('path', { d, fill: 'none', stroke: '#60a5fa', 'stroke-width': 13, 'stroke-linecap': 'round' }, svg);
-        el('path', { d, fill: 'none', stroke: '#dbeafe', 'stroke-width': 2, 'stroke-dasharray': '8 16', 'stroke-linecap': 'round', class: 'river-flow' }, svg);
+        el('path', { d, fill: 'none', stroke: C.river[0], 'stroke-width': 19, 'stroke-linecap': 'round', opacity: 0.55 }, svg);
+        el('path', { d, fill: 'none', stroke: C.river[1], 'stroke-width': 13, 'stroke-linecap': 'round' }, svg);
+        el('path', { d, fill: 'none', stroke: C.river[2], 'stroke-width': 2, 'stroke-dasharray': '8 16', 'stroke-linecap': 'round', class: 'river-flow' }, svg);
         const by = riverYAt(it, it.trailX);
         const bridge = el('g', { transform: `translate(${f1(it.trailX)} ${f1(by)})`, 'data-bridge': i }, svg);
         bridge.innerHTML = `
@@ -375,8 +413,8 @@ function buildStatic(scene, m) {
         if (it.nodes.some(nd => Math.abs(nd.x - x) < 32)) return;
         const y = it.top + 6 + rand(i, 22) * 10;
         const s = 0.7 + rand(i, 23) * 0.7;
-        el('polygon', { points: `${f1(x - 10 * s)},${f1(y + 5 * s)} ${f1(x - 6 * s)},${f1(y - 4 * s)} ${f1(x + 2 * s)},${f1(y - 7 * s)} ${f1(x + 10 * s)},${f1(y + 5 * s)}`, fill: '#78716c' }, svg);
-        el('polygon', { points: `${f1(x - 6 * s)},${f1(y - 4 * s)} ${f1(x + 2 * s)},${f1(y - 7 * s)} ${f1(x)},${f1(y)}`, fill: '#a8a29e' }, svg);
+        el('polygon', { points: `${f1(x - 10 * s)},${f1(y + 5 * s)} ${f1(x - 6 * s)},${f1(y - 4 * s)} ${f1(x + 2 * s)},${f1(y - 7 * s)} ${f1(x + 10 * s)},${f1(y + 5 * s)}`, fill: C.rock[0] }, svg);
+        el('polygon', { points: `${f1(x - 6 * s)},${f1(y - 4 * s)} ${f1(x + 2 * s)},${f1(y - 7 * s)} ${f1(x)},${f1(y)}`, fill: C.rock[1] }, svg);
     });
 
     // Bosque en las laderas bajas
@@ -397,8 +435,8 @@ function buildStatic(scene, m) {
                 y = it.top + 6 + rand(i, r + 40) * 12;
             }
             const s = 0.8 + rand(i, r + 50) * 0.5;
-            el('rect', { x: f1(x - 1.5 * s), y: f1(y + 6 * s), width: f1(3 * s), height: f1(6 * s), fill: '#5b3a1e' }, svg);
-            el('polygon', { points: `${f1(x)},${f1(y - 16 * s)} ${f1(x - 8 * s)},${f1(y + 7 * s)} ${f1(x + 8 * s)},${f1(y + 7 * s)}`, fill: (i + r) % 3 ? '#2f6b3a' : '#3d7f47' }, svg);
+            el('rect', { x: f1(x - 1.5 * s), y: f1(y + 6 * s), width: f1(3 * s), height: f1(6 * s), fill: C.trunk }, svg);
+            el('polygon', { points: `${f1(x)},${f1(y - 16 * s)} ${f1(x - 8 * s)},${f1(y + 7 * s)} ${f1(x + 8 * s)},${f1(y + 7 * s)}`, fill: C.trees[(i + r) % 3 ? 0 : 1] }, svg);
         }
     });
 
@@ -416,7 +454,8 @@ function buildStatic(scene, m) {
             <polygon points="-25,-6 0,-28 25,-6" fill="#7c2d12"/>
             <rect x="-5" y="2" width="10" height="14" rx="1" fill="#451a03"/>
             <rect x="-16" y="-1" width="8" height="7" fill="#fde68a"/>
-            <rect x="8" y="-1" width="8" height="7" fill="#fde68a"/>`;
+            <rect x="8" y="-1" width="8" height="7" fill="#fde68a"/>
+            ${C.night ? '<circle cx="-12" cy="2.5" r="11" fill="#fde68a" opacity=".22"/><circle cx="12" cy="2.5" r="11" fill="#fde68a" opacity=".22"/>' : ''}`;
     });
 
     // Bandera de la cumbre
@@ -504,7 +543,7 @@ function drawRoute(scene, m, route, broken) {
     // Tu sendero
     const d = points.length > 1 ? splinePath(points) : '';
     if (d) {
-        el('path', { d, fill: 'none', stroke: '#ffffff', 'stroke-width': 13, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.55, class: 'route-fade' }, g);
+        el('path', { d, fill: 'none', stroke: palette().trailEdge, 'stroke-width': 13, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', opacity: 0.55, class: 'route-fade' }, g);
         const main = el('path', { d, fill: 'none', stroke: '#b7793f', 'stroke-width': 8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'main-trail', 'data-rests': route.restsCrossed }, g);
         el('path', { d, fill: 'none', stroke: '#fef3c7', 'stroke-width': 2, 'stroke-dasharray': '5 9', 'stroke-linecap': 'round', class: 'route-fade' }, g);
 
@@ -589,7 +628,9 @@ function drawNodes(scene, m, route, ctx) {
     const layer = scene.querySelector('.node-layer');
     const { subscriptions, visibleKeys, broken, today, onOpen } = ctx;
     const chosenKeys = new Set(route.chosen.map(n => n.key));
-    const nextKey = route.chosen.find(n => n.event.date >= today)?.key;
+    const C = palette();
+    const resultOf = new Map(subscriptions.map(s => [eventKey(s), s.result]));
+    const nextKey = route.chosen.find(n => n.event.date >= today && !resultOf.get(n.key))?.key;
     const isFirstDraw = prevChosen === null;
     layer.innerHTML = '';
 
@@ -603,31 +644,34 @@ function drawNodes(scene, m, route, ctx) {
         btn.dataset.key = key;
         btn.dataset.state = state;
         btn.title = `${event.subj}\n${formatShortDate(event.date)} · ${event.time} h · Div ${event.div}${state === 'locked' ? '\n🔒 Bloqueada por correlativa' : ''}`;
-        btn.setAttribute('aria-label', `${event.subj}, ${formatShortDate(event.date)} ${event.time}, división ${event.div}${state === 'subscribed' ? ', elegida' : ''}`);
+        btn.setAttribute('aria-label', `${event.subj}, ${formatShortDate(event.date)} ${event.time}, división ${event.div}${{ subscribed: ', elegida', passed: ', aprobada', failed: ', no aprobada' }[state] || ''}`);
 
         let scale = 0.86;
         let style = `background:${color};color:#fff;`;
         let cls = 'mt-node absolute rounded-full flex items-center justify-center font-bold leading-none border-2 border-white shadow-md transition-[transform,opacity] duration-300';
         let extra = '';
 
-        if (state === 'subscribed') {
-            scale = 1.15;
+        if (isMine(state)) {
+            scale = state === 'failed' ? 0.95 : 1.15;
             cls += ' z-20 ring-4 ring-white/70';
             if (key === nextKey) cls += ' node-next';
             if (!isFirstDraw && !prevChosen.has(key)) cls += ' node-pop';
-            const past = event.date < today;
-            const label = past ? `✓ ${formatShortDate(event.date)}`
+            const short = `${event.date.slice(8).replace(/^0/, '')} ${MONTHS_SHORT[Number(event.date.slice(5, 7)) - 1]}`;
+            const label = state === 'passed' ? `Aprobada · ${short}`
+                : state === 'failed' ? `No aprobada · ${short}`
                 : key === nextKey ? `${countdownLabel(event.date)} · ${event.time}`
-                : `${event.date.slice(8).replace(/^0/, '')} ${MONTHS_SHORT[Number(event.date.slice(5, 7)) - 1]} · ${event.time}`;
-            extra += `<span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 whitespace-nowrap text-[10px] font-semibold bg-white text-gray-900 rounded-full shadow px-2 py-0.5" style="transform:translateX(-50%) scale(${f1(1 / scale)})">${escapeHtml(label)}</span>`;
-            extra += `<span class="absolute -top-3 -right-2 text-sm" aria-hidden="true">${past ? '✅' : '🚩'}</span>`;
+                : `${short} · ${event.time}`;
+            const flag = state === 'passed' ? '✅' : state === 'failed' ? '❌' : '🚩';
+            if (state === 'failed') style += 'filter:grayscale(.7);opacity:.75;';
+            extra += `<span class="absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 whitespace-nowrap text-[10px] font-semibold bg-white ${state === 'failed' ? 'text-red-700' : state === 'passed' ? 'text-emerald-700' : 'text-gray-900'} rounded-full shadow px-2 py-0.5" style="transform:translateX(-50%) scale(${f1(1 / scale)})">${escapeHtml(label)}</span>`;
+            extra += `<span class="absolute -top-3 -right-2 text-sm" aria-hidden="true">${flag}</span>`;
             if (broken.has(key)) extra += '<span class="absolute -bottom-2 -right-2 text-xs" aria-hidden="true">⚠️</span>';
         } else if (state === 'other') {
-            style = `background:#fff;color:${color};border-color:${color};border-style:dashed;`;
+            style = `background:${C.otherBg};color:${color};border-color:${color};border-style:dashed;`;
             cls += ' opacity-80';
             scale = 0.78;
         } else if (state === 'locked') {
-            style = 'background:#d6d3d1;color:#57534e;';
+            style = `background:${C.lockedBg};color:${C.lockedFg};`;
             cls += ' opacity-70';
             extra += '<span class="absolute -top-2 -right-2 text-[10px]" aria-hidden="true">🔒</span>';
             scale = 0.78;
@@ -707,7 +751,7 @@ export function renderMountain(container, hud, ctx) {
         container.append(scene, camps);
     }
 
-    const sig = `${W}|${events.length}|${events[0]?.date}|${events[events.length - 1]?.date}|${today}`;
+    const sig = `${W}|${events.length}|${events[0]?.date}|${events[events.length - 1]?.date}|${today}|${isDark()}`;
     if (sig !== staticSig) {
         map = layout(buildMap(events, today), W);
         buildStatic(scene, map);
@@ -724,10 +768,11 @@ export function renderMountain(container, hud, ctx) {
     });
 
     // Campamentos "por elegir"
-    const chosenSubjects = new Set(subscriptions.map(s => s.subj));
+    const chosenSubjects = new Set(subscriptions.filter(isActive).map(s => s.subj));
+    const passedCount = new Set(subscriptions.filter(s => s.result === 'passed').map(s => s.subj)).size;
     const pending = subjects.filter(s => !chosenSubjects.has(s));
     camps.innerHTML = `
-        <div class="bg-gradient-to-b from-[#7fb565] to-[#5f9a4a] px-4 py-4 text-white">
+        <div class="bg-gradient-to-b ${palette().camps} px-4 py-4 text-white">
             <p class="text-sm font-bold">${pending.length ? `⛺ Por elegir (${pending.length})` : '🎉 ¡Todas las materias tienen fecha!'}</p>
             ${pending.length ? '<p class="text-xs text-white/80 mb-3">Tocá un campamento para ver sus fechas en el calendario.</p>' : ''}
             <div class="flex flex-wrap gap-2">
@@ -743,7 +788,7 @@ export function renderMountain(container, hud, ctx) {
 
     // HUD
     const rests = map.items.filter(it => it.type === 'rest').length;
-    const nextNode = route.chosen.find(n => n.event.date >= today);
+    const nextNode = route.chosen.find(n => n.event.date >= today && !subscriptions.find(s => eventKey(s) === n.key)?.result);
     const pct = subjects.length ? Math.round((chosenSubjects.size / subjects.length) * 100) : 0;
     const summitAlt = map.items[map.items.length - 1].altitude;
     hud.innerHTML = `
@@ -758,6 +803,7 @@ export function renderMountain(container, hud, ctx) {
                 <div class="h-full rounded-full bg-gradient-to-r from-emerald-500 to-sky-500 transition-all duration-500" style="width:${pct}%"></div>
             </div>
             <div class="hidden sm:flex gap-4 text-xs text-gray-600 mt-1.5">
+                <span>✅ <strong class="text-gray-900">${passedCount}</strong> aprobada${passedCount === 1 ? '' : 's'}</span>
                 <span>🏠 <strong class="text-gray-900">${rests}</strong> refugios</span>
                 <span>🏁 Cumbre a <strong class="text-gray-900">${summitAlt.toLocaleString('es-AR')}</strong> m</span>
                 <span class="ml-auto">${pct}%</span>

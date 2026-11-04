@@ -4,6 +4,8 @@ import { getColorForSubject, formatShortDate, formatMonth, todayIso, byDateTime,
 
 const STATE_BADGE = {
     subscribed: '<span class="shrink-0 text-[11px] font-semibold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">✓ Inscripto</span>',
+    passed: '<span class="shrink-0 text-[11px] font-semibold text-emerald-700 bg-emerald-100 rounded-full px-2 py-0.5">✅ Aprobada</span>',
+    failed: '<span class="shrink-0 text-[11px] font-semibold text-red-700 bg-red-50 rounded-full px-2 py-0.5">❌ No aprobada</span>',
     other: '<span class="shrink-0 text-[11px] text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">Otra fecha</span>',
     locked: '<span class="shrink-0 text-[11px] text-gray-500 bg-gray-100 rounded-full px-2 py-0.5">🔒</span>',
     available: ''
@@ -67,7 +69,7 @@ function buildRow(event, subscriptions, onEventClick) {
     const color = getColorForSubject(event.subj);
     const row = document.createElement('button');
     row.type = 'button';
-    row.className = `w-full text-left flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-gray-50 active:bg-gray-100 ${state === 'subscribed' ? 'bg-emerald-50 hover:bg-emerald-100' : ''} ${state === 'locked' || state === 'other' ? 'opacity-60' : ''}`;
+    row.className = `w-full text-left flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-gray-50 active:bg-gray-100 ${state === 'subscribed' || state === 'passed' ? 'bg-emerald-50 hover:bg-emerald-100' : ''} ${state === 'failed' ? 'bg-red-50' : ''} ${state === 'locked' || state === 'other' ? 'opacity-60' : ''}`;
 
     let detail = `Div ${escapeHtml(event.div)} · ${escapeHtml(event.prof || 'Sin profesor')}`;
     if (state === 'locked') {

@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#ffffff">
     <title>Calendario de Exámenes 2026-27</title>
+    <script>
+        // Aplicar el tema antes de pintar (evita un destello claro)
+        (function () {
+            var pref = null;
+            try { pref = localStorage.getItem('theme'); } catch (e) {}
+            var dark = pref ? pref === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (dark) document.documentElement.classList.add('dark');
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -24,6 +33,56 @@
         .flash { animation: flash-bg 1.4s ease-out; }
 
         #agenda-aside { scrollbar-width: thin; }
+
+        /* --- Modo oscuro suave --- */
+        html.dark { color-scheme: dark; }
+        .dark body, .dark .bg-gray-100 { background-color: #171a21; }
+        .dark .bg-white { background-color: #20242d; }
+        .dark .bg-white\/90, .dark .bg-white\/95 { background-color: rgba(32, 36, 45, .92); }
+        .dark .bg-gray-50 { background-color: #262b35; }
+        .dark .bg-gray-200 { background-color: #343a46; }
+        .dark .bg-gray-300 { background-color: #4a5160; }
+        .dark .bg-sky-100 { background-color: #1e2633; }
+        .dark .text-gray-900 { color: #e7e9ee; }
+        .dark .text-gray-700 { color: #cdd1da; }
+        .dark .text-gray-600 { color: #aab0bc; }
+        .dark .text-gray-500 { color: #8d94a1; }
+        .dark .text-gray-400 { color: #6f7684; }
+        .dark .border-gray-100 { border-color: #2b303b; }
+        .dark .border-gray-200 { border-color: #343a46; }
+        .dark .bg-gray-900, .dark .view-tab[aria-selected="true"] { background-color: #e2e5eb; color: #14171d; }
+        .dark .border-gray-900 { border-color: #e2e5eb; }
+        .dark .bg-emerald-50 { background-color: rgba(16, 185, 129, .13); }
+        .dark .bg-emerald-100 { background-color: rgba(16, 185, 129, .22); }
+        .dark .text-emerald-700 { color: #6ee7b7; }
+        .dark .text-emerald-600 { color: #34d399; }
+        .dark .border-emerald-200 { border-color: rgba(16, 185, 129, .35); }
+        .dark .bg-amber-50 { background-color: rgba(245, 158, 11, .12); }
+        .dark .bg-amber-100 { background-color: rgba(245, 158, 11, .22); }
+        .dark .text-amber-900, .dark .text-amber-800 { color: #fcd34d; }
+        .dark .text-amber-700 { color: #fbbf24; }
+        .dark .border-amber-200 { border-color: rgba(245, 158, 11, .35); }
+        .dark .bg-blue-50 { background-color: rgba(59, 130, 246, .14); }
+        .dark .text-blue-900, .dark .text-blue-700 { color: #93c5fd; }
+        .dark .text-blue-600 { color: #60a5fa; }
+        .dark .border-blue-200 { border-color: rgba(59, 130, 246, .35); }
+        .dark .bg-red-50 { background-color: rgba(239, 68, 68, .12); }
+        .dark .text-red-700 { color: #fca5a5; }
+        .dark .border-red-200 { border-color: rgba(239, 68, 68, .35); }
+        .dark .hover\:bg-gray-50:hover, .dark .hover\:bg-gray-100:hover, .dark .hover\:bg-white:hover { background-color: #2b303b; }
+        .dark .active\:bg-gray-100:active, .dark .active\:bg-gray-200:active { background-color: #343a46; }
+        .dark .hover\:bg-emerald-100:hover { background-color: rgba(16, 185, 129, .22); }
+        .dark .hover\:bg-blue-50:hover, .dark .active\:bg-blue-100:active { background-color: rgba(59, 130, 246, .2); }
+        .dark .hover\:bg-amber-100:hover { background-color: rgba(245, 158, 11, .22); }
+        .dark .hover\:bg-red-50:hover, .dark .hover\:bg-red-100:hover { background-color: rgba(239, 68, 68, .2); }
+        .dark .ring-white\/70 { --tw-ring-color: rgba(32, 36, 45, .7); }
+        @keyframes flash-bg-dark {
+            0%, 40% { background-color: rgba(245, 158, 11, .25); }
+            100% { background-color: transparent; }
+        }
+        .dark .flash { animation-name: flash-bg-dark; }
+        .star { animation: twinkle 3s ease-in-out infinite alternate; }
+        @keyframes twinkle { from { opacity: .25; } to { opacity: 1; } }
 
         /* --- Montaña --- */
         .climber { transform: translate(-50%, -100%); animation: bob 1.6s ease-in-out infinite; }
@@ -58,7 +117,7 @@
         .view-tab[aria-selected="true"] { background: #111827; color: #fff; }
 
         @media (prefers-reduced-motion: reduce) {
-            .climber, .node-next, .node-pop, .cloud, .smoke, .river-flow { animation: none !important; }
+            .climber, .node-next, .node-pop, .cloud, .smoke, .river-flow, .star { animation: none !important; }
             .trail-draw { transition: none !important; }
             .route-fade { opacity: 1; animation: none; }
         }
@@ -90,6 +149,7 @@
             </div>
             <div class="flex items-center gap-2 shrink-0">
                 <button id="sync-pill" type="button" class="text-xs font-medium px-2.5 py-1 rounded-full border bg-gray-100 text-gray-600 border-gray-200">…</button>
+                <button id="theme-button" type="button" title="Modo oscuro" aria-label="Modo oscuro" class="w-9 h-9 rounded-full hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center text-lg">🌙</button>
                 <button id="settings-button" type="button" title="Token de GitHub" aria-label="Configurar sincronización" class="w-9 h-9 rounded-full hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center text-lg">⚙️</button>
             </div>
         </div>
@@ -169,6 +229,7 @@
             </div>
             <div class="p-4 sm:p-5 space-y-4 overflow-y-auto flex-1">
                 <div id="modal-note" class="hidden"></div>
+                <div id="modal-result" class="hidden"></div>
                 <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm">
                     <dt class="text-gray-500">Fecha</dt>
                     <dd id="modal-datetime" class="font-semibold first-letter:uppercase"></dd>

@@ -1,7 +1,8 @@
 import { loadData, getEvents, getMonths, getConfig } from './data.js';
 import { loadSubscriptions, saveSubscriptions, onSyncStatus, hasPendingChanges, flush } from './storage.js';
 import { setToken, getToken, hasWriteAccess } from './cloud.js';
-import { findBrokenSubscriptions } from './locks.js';
+import { findBrokenSubscriptions, isActive, getDependents } from './locks.js';
+import { initTheme } from './theme.js';
 import { renderMonths, flash } from './calendar.js';
 import { renderAgenda } from './agenda.js';
 import { renderNextExam } from './nextExam.js';
@@ -54,7 +55,7 @@ class App {
             if (s.date < firstDate) return [];
             const match = events.find(e => e.subj === s.subj && e.date === s.date && e.div === s.div)
                 || events.find(e => e.subj === s.subj && e.date === s.date);
-            return [match ? { ...match } : s];
+            return [match ? { ...match, ...(s.result ? { result: s.result } : {}) } : s];
         });
     };
 
@@ -81,6 +82,7 @@ class App {
         if (!fresh) this.toast('Sin conexión: mostrando la última copia guardada', 'warn');
 
         initModalListeners();
+        initTheme(() => this.render());
         $('settings-button').addEventListener('click', () => this.configureToken());
         $('sync-pill').addEventListener('click', () => this.onPillClick());
         $('reset-button').addEventListener('click', () => this.resetAll());
@@ -148,7 +150,8 @@ class App {
 
         renderNextExam($('next-exam'), subs, open);
 
-        const chosen = new Set(subs.map(s => s.subj));
+        const chosen = new Set(subs.filter(isActive).map(s => s.subj));
+        const passed = new Set(subs.filter(s => s.result === 'passed').map(s => s.subj));
         const missing = this.subjects.filter(s => !chosen.has(s));
         const broken = findBrokenSubscriptions(subs);
         const orphans = this.orphans;
@@ -179,12 +182,14 @@ class App {
         renderSubscriptions($('subscriptions-list'), subs, broken, {
             onOpen: open,
             onRemove: sub => this.remove(sub),
+            onResult: (sub, result) => this.setResult(sub, result),
             orphans
         });
 
         // Progreso + materias que faltan (al pie, para el celular)
         $('subscriptions-progress').textContent =
-            `${chosen.size} de ${this.subjects.length} materias con fecha elegida`;
+            `${chosen.size} de ${this.subjects.length} materias con fecha elegida` +
+            (passed.size ? ` · ${passed.size} aprobada${passed.size > 1 ? 's' : ''}` : '');
         const bottom = $('missing-bottom');
         bottom.innerHTML = missing.length ? `
             <button type="button" class="w-full text-left text-sm rounded-2xl px-4 py-3 border ${
@@ -255,11 +260,33 @@ class App {
                 this.persist('Inscripción guardada');
             },
             onRemove: sub => this.remove(sub),
+            onResult: (sub, result) => this.setResult(sub, result),
             onReplace: (old, e) => {
                 this.subscriptions = [...this.subscriptions.filter(s => eventKey(s) !== eventKey(old)), e];
                 this.persist('Fecha cambiada');
             }
         });
+    }
+
+    /** Marca una fecha como aprobada / no aprobada (o borra el resultado con null) */
+    setResult(sub, result) {
+        const key = eventKey(sub);
+        const brokenBefore = findBrokenSubscriptions(this.subscriptions);
+        this.subscriptions = this.subscriptions.map(s => {
+            if (eventKey(s) !== key) return s;
+            const { result: _old, ...rest } = s;
+            return result ? { ...rest, result } : rest;
+        });
+        const newlyCut = [...findBrokenSubscriptions(this.subscriptions)].filter(k => !brokenBefore.has(k)).length;
+
+        let message = 'Resultado borrado';
+        if (result === 'passed') message = `✅ ${sub.subj}: ¡aprobada!`;
+        if (result === 'failed') {
+            message = `❌ ${sub.subj}: no aprobada`;
+            if (newlyCut) message += ` · se cortó el camino de ${newlyCut} correlativa${newlyCut > 1 ? 's' : ''}`;
+            else if (getDependents(sub.subj).length) message += ' · sus correlativas quedan bloqueadas';
+        }
+        this.persist(message);
     }
 
     remove(sub) {
